@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertCircle, Play, Square, Settings, TrendingUp, Wallet, Zap } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { BASE_RPC_URLS } from "@/lib/constants"
 
 // Import only types and utilities from browser-safe file
 import { type RealPoolData, formatPoolData } from "@/lib/real-sniper-bot"
