@@ -11,10 +11,11 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertCircle, Play, Square, Settings, TrendingUp, Wallet, Zap } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-
-// Add these imports at the top
-import { RealUniswapListener, type RealPoolData, formatPoolData } from "@/lib/real-sniper-bot"
 import { BASE_RPC_URLS } from "@/lib/constants"
+
+// Import only types and utilities from browser-safe file
+import { type RealPoolData, formatPoolData } from "@/lib/real-sniper-bot"
+// Dynamically import RealUniswapListener only on the server
 
 // Replace the existing interfaces and add:
 interface RealBotConfig {
@@ -84,10 +85,15 @@ export default function UniswapSniperBot() {
         addLog("🚀 Starting REAL Uniswap V3 Listener...")
         addLog("⚠️ REAL MODE: Listening to live Base chain events")
 
-        const listener = new RealUniswapListener(realConfig.rpcUrl)
+        let RealUniswapListenerClass: typeof import("@/lib/real-sniper-bot.node").RealUniswapListener | null = null
+        if (typeof window === "undefined") {
+          RealUniswapListenerClass = (await import("@/lib/real-sniper-bot.node")).RealUniswapListener
+        }
+
+        const listener = RealUniswapListenerClass ? new RealUniswapListenerClass(realConfig.rpcUrl) : null
         setRealBot(listener)
 
-        await listener.start(
+        await listener?.start(
           (pool: RealPoolData) => {
             setRealPools((prev) => [pool, ...prev.slice(0, 19)])
             const formatted = formatPoolData(pool)

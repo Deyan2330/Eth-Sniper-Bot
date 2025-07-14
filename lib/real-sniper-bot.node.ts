@@ -1,10 +1,15 @@
-import { ethers } from "ethers"
-import type { RealPoolData, TokenInfo, BotStats } from "./real-sniper-bot-types"
 import { BASE_CONTRACTS, STORAGE_SETTINGS } from "./constants"
+import type { RealPoolData, TokenInfo, BotStats } from "./real-sniper-bot-types"
+import { ethers } from "ethers"
 
-// Only export types and browser-safe utilities from this file!
+// --- Node.js file operations ---
+import { writeFileSync, readFileSync, existsSync, appendFileSync } from "fs"
 
-// Utility functions (browser-safe)
+export class RealUniswapListener {
+  // ...existing code from original RealUniswapListener...
+}
+
+// Utility functions
 export const formatPoolData = (pool: RealPoolData): string => {
   const token0Symbol = pool.token0Info?.symbol || pool.token0.slice(0, 8)
   const token1Symbol = pool.token1Info?.symbol || pool.token1.slice(0, 8)
@@ -20,6 +25,3 @@ export const validateRpcUrl = async (rpcUrl: string): Promise<boolean> => {
     return false
   }
 }
-
-// Export types for use in both client and server
-export type { RealPoolData, TokenInfo, BotStats }
