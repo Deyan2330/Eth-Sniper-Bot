@@ -12,6 +12,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertCircle, Play, Square, Settings, TrendingUp, Wallet, Zap } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
+// Add these imports at the top
+import { RealUniswapListener, type RealPoolData, formatPoolData } from "@/lib/real-sniper-bot"
+import { BASE_RPC_URLS } from "@/lib/constants"
+
+// Replace the existing interfaces and add:
+interface RealBotConfig {
+  rpcUrl: string
+  enableRealMode: boolean
+}
+
 interface PoolData {
   token0: string
   token1: string
@@ -46,48 +56,89 @@ export default function UniswapSniperBot() {
   })
   const [logs, setLogs] = useState<string[]>([])
 
+  // Add state for real bot
+  const [realBot, setRealBot] = useState<RealUniswapListener | null>(null)
+  const [realPools, setRealPools] = useState<RealPoolData[]>([])
+  const [realConfig, setRealConfig] = useState<RealBotConfig>({
+    rpcUrl: BASE_RPC_URLS.MAINNET,
+    enableRealMode: false,
+  })
+
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
     setLogs((prev) => [`[${timestamp}] ${message}`, ...prev.slice(0, 99)])
   }
 
+  // Replace the startBot function with:
   const startBot = async () => {
-    if (!config.privateKey) {
-      addLog("❌ Private key required")
+    if (!config.privateKey && !realConfig.enableRealMode) {
+      addLog("❌ Private key required for demo mode")
       return
     }
 
     setIsRunning(true)
-    addLog("🚀 Starting Uniswap Sniper Bot...")
-    addLog("👂 Listening for new pairs on Base chain")
 
-    // Simulate bot activity for demo
-    const interval = setInterval(() => {
-      if (Math.random() > 0.7) {
-        const mockPool: PoolData = {
-          token0: `0x${Math.random().toString(16).substr(2, 40)}`,
-          token1: `0x${Math.random().toString(16).substr(2, 40)}`,
-          pool: `0x${Math.random().toString(16).substr(2, 40)}`,
-          fee: Math.random() > 0.5 ? 3000 : 500,
-          timestamp: new Date().toISOString(),
-          blockNumber: Math.floor(Math.random() * 1000000) + 18000000,
-          txHash: `0x${Math.random().toString(16).substr(2, 64)}`,
-        }
-        setPools((prev) => [mockPool, ...prev.slice(0, 19)])
-        addLog(`🔍 New pool detected: ${mockPool.pool.slice(0, 8)}...`)
+    if (realConfig.enableRealMode) {
+      // REAL MODE - Listen to actual blockchain
+      try {
+        addLog("🚀 Starting REAL Uniswap V3 Listener...")
+        addLog("⚠️ REAL MODE: Listening to live Base chain events")
+
+        const listener = new RealUniswapListener(realConfig.rpcUrl)
+        setRealBot(listener)
+
+        await listener.start(
+          (pool: RealPoolData) => {
+            setRealPools((prev) => [pool, ...prev.slice(0, 19)])
+            const formatted = formatPoolData(pool)
+            addLog(`🎯 REAL POOL: ${formatted}`)
+          },
+          (message: string) => {
+            addLog(message)
+          },
+        )
+      } catch (error) {
+        addLog(`❌ Failed to start real listener: ${error}`)
+        setIsRunning(false)
       }
-    }, 3000)
+    } else {
+      // DEMO MODE - Simulate for testing
+      addLog("🚀 Starting Demo Mode (Simulated Data)")
+      addLog("👂 Listening for simulated pairs...")
 
-    // Store interval for cleanup
-    ;(window as any).botInterval = interval
+      const interval = setInterval(() => {
+        if (Math.random() > 0.7) {
+          const mockPool: PoolData = {
+            token0: `0x${Math.random().toString(16).substr(2, 40)}`,
+            token1: `0x${Math.random().toString(16).substr(2, 40)}`,
+            pool: `0x${Math.random().toString(16).substr(2, 40)}`,
+            fee: Math.random() > 0.5 ? 3000 : 500,
+            timestamp: new Date().toISOString(),
+            blockNumber: Math.floor(Math.random() * 1000000) + 18000000,
+            txHash: `0x${Math.random().toString(16).substr(2, 64)}`,
+          }
+          setPools((prev) => [mockPool, ...prev.slice(0, 19)])
+          addLog(`🔍 Demo pool: ${mockPool.pool.slice(0, 8)}...`)
+        }
+      }, 3000)
+      ;(window as any).botInterval = interval
+    }
   }
 
-  const stopBot = () => {
+  // Update the stopBot function:
+  const stopBot = async () => {
     setIsRunning(false)
+
+    if (realBot) {
+      await realBot.stop()
+      setRealBot(null)
+      addLog("⏹️ Real listener stopped")
+    }
+
     if ((window as any).botInterval) {
       clearInterval((window as any).botInterval)
+      addLog("⏹️ Demo mode stopped")
     }
-    addLog("⏹️ Bot stopped")
   }
 
   useEffect(() => {
@@ -275,6 +326,43 @@ export default function UniswapSniperBot() {
                     placeholder="Your private key (keep secure!)"
                   />
                 </div>
+                <div className="border-t pt-4 mt-4">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Switch
+                      id="real-mode"
+                      checked={realConfig.enableRealMode}
+                      onCheckedChange={(checked) => setRealConfig((prev) => ({ ...prev, enableRealMode: checked }))}
+                    />
+                    <Label htmlFor="real-mode" className="font-semibold text-orange-600">
+                      🔴 REAL MODE - Listen to Live Base Chain
+                    </Label>
+                  </div>
+
+                  {realConfig.enableRealMode && (
+                    <div className="space-y-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          <strong>REAL MODE ENABLED:</strong> This will connect to the actual Base blockchain and listen
+                          for real Uniswap V3 pool creation events. No trading will occur - only listening and logging.
+                        </AlertDescription>
+                      </Alert>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="rpc-url">Base Chain RPC URL</Label>
+                        <Input
+                          id="rpc-url"
+                          value={realConfig.rpcUrl}
+                          onChange={(e) => setRealConfig((prev) => ({ ...prev, rpcUrl: e.target.value }))}
+                          placeholder="https://mainnet.base.org"
+                        />
+                        <p className="text-xs text-gray-600">
+                          Free: https://mainnet.base.org | For better reliability, use Alchemy or Infura
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -287,34 +375,72 @@ export default function UniswapSniperBot() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {pools.map((pool, index) => (
-                    <div key={index} className="border rounded-lg p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="outline">Pool #{pools.length - index}</Badge>
-                        <Badge variant={pool.fee === 3000 ? "default" : "secondary"}>{pool.fee / 10000}% Fee</Badge>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <span className="font-medium">Token0:</span> {pool.token0.slice(0, 10)}...
+                  {(() => {
+                    // Show real pools if in real mode, otherwise show demo pools
+                    const displayPools = realConfig.enableRealMode ? realPools : pools
+
+                    return displayPools.length > 0 ? (
+                      displayPools.map((pool, index) => (
+                        <div key={index} className="border rounded-lg p-4 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Badge variant="outline">
+                              {realConfig.enableRealMode ? "REAL" : "DEMO"} Pool #{displayPools.length - index}
+                            </Badge>
+                            <Badge variant={pool.fee === 3000 ? "default" : "secondary"}>{pool.fee / 10000}% Fee</Badge>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                            {realConfig.enableRealMode ? (
+                              // Real pool data
+                              <>
+                                <div>
+                                  <span className="font-medium">Token0:</span>{" "}
+                                  {(pool as RealPoolData).token0Info?.symbol ||
+                                    (pool as RealPoolData).token0.slice(0, 10)}
+                                  ...
+                                </div>
+                                <div>
+                                  <span className="font-medium">Token1:</span>{" "}
+                                  {(pool as RealPoolData).token1Info?.symbol ||
+                                    (pool as RealPoolData).token1.slice(0, 10)}
+                                  ...
+                                </div>
+                                <div>
+                                  <span className="font-medium">Pool:</span>{" "}
+                                  {(pool as RealPoolData).poolAddress.slice(0, 10)}...
+                                </div>
+                                <div>
+                                  <span className="font-medium">Block:</span> {pool.blockNumber}
+                                </div>
+                              </>
+                            ) : (
+                              // Demo pool data
+                              <>
+                                <div>
+                                  <span className="font-medium">Token0:</span> {(pool as PoolData).token0.slice(0, 10)}
+                                  ...
+                                </div>
+                                <div>
+                                  <span className="font-medium">Token1:</span> {(pool as PoolData).token1.slice(0, 10)}
+                                  ...
+                                </div>
+                                <div>
+                                  <span className="font-medium">Pool:</span> {(pool as PoolData).pool.slice(0, 10)}...
+                                </div>
+                                <div>
+                                  <span className="font-medium">Block:</span> {pool.blockNumber}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500">{new Date(pool.timestamp).toLocaleString()}</div>
                         </div>
-                        <div>
-                          <span className="font-medium">Token1:</span> {pool.token1.slice(0, 10)}...
-                        </div>
-                        <div>
-                          <span className="font-medium">Pool:</span> {pool.pool.slice(0, 10)}...
-                        </div>
-                        <div>
-                          <span className="font-medium">Block:</span> {pool.blockNumber}
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-500">{new Date(pool.timestamp).toLocaleString()}</div>
-                    </div>
-                  ))}
-                  {pools.length === 0 && (
-                    <p className="text-gray-500 text-center py-8">
-                      No pools detected yet. Start the bot to begin monitoring.
-                    </p>
-                  )}
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-center py-8">
+                        No pools detected yet. Start the bot to begin monitoring.
+                      </p>
+                    )
+                  })()}
                 </div>
               </CardContent>
             </Card>
