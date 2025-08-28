@@ -211,6 +211,14 @@ export default function UniswapSniperBot() {
     }
   }, [])
 
+  // Helper function to safely format numbers
+  const safeToLocaleString = (value: number | undefined | null): string => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return "0"
+    }
+    return value.toLocaleString()
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
       {/* Professional Header with Gradient Overlay */}
@@ -290,11 +298,11 @@ export default function UniswapSniperBot() {
                   <p className="text-sm font-medium text-slate-400 mb-1">Pools Detected</p>
                   <p className="text-2xl font-bold text-white">
                     {realConfig.enableRealMode
-                      ? realTimeStats.totalPools.toLocaleString()
-                      : pools.length.toLocaleString()}
+                      ? safeToLocaleString(realTimeStats.totalPools)
+                      : safeToLocaleString(pools.length)}
                   </p>
                   <p className="text-xs text-emerald-400">
-                    +{realConfig.enableRealMode ? realTimeStats.recentPools : 0} recent
+                    +{realConfig.enableRealMode ? safeToLocaleString(realTimeStats.recentPools) : "0"} recent
                   </p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-emerald-400" />
@@ -400,13 +408,15 @@ export default function UniswapSniperBot() {
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-700">
                     <div className="text-center p-3 bg-slate-800/50 rounded-lg">
                       <p className="text-2xl font-bold text-emerald-400">
-                        {realConfig.enableRealMode ? realTimeStats.totalPools : pools.length}
+                        {realConfig.enableRealMode
+                          ? safeToLocaleString(realTimeStats.totalPools)
+                          : safeToLocaleString(pools.length)}
                       </p>
                       <p className="text-xs text-slate-400">Total Detected</p>
                     </div>
                     <div className="text-center p-3 bg-slate-800/50 rounded-lg">
                       <p className="text-2xl font-bold text-blue-400">
-                        {realConfig.enableRealMode ? realTimeStats.recentPools : 0}
+                        {realConfig.enableRealMode ? safeToLocaleString(realTimeStats.recentPools) : "0"}
                       </p>
                       <p className="text-xs text-slate-400">Recent Activity</p>
                     </div>
@@ -664,7 +674,7 @@ export default function UniswapSniperBot() {
                                 <div className="space-y-1">
                                   <span className="text-yellow-400 font-medium">Block Height:</span>
                                   <div className="font-mono text-white bg-slate-900/50 p-2 rounded">
-                                    #{pool.blockNumber.toLocaleString()}
+                                    #{safeToLocaleString(pool.blockNumber)}
                                   </div>
                                 </div>
                               </>
@@ -691,7 +701,7 @@ export default function UniswapSniperBot() {
                                 <div className="space-y-1">
                                   <span className="text-yellow-400 font-medium">Block Height:</span>
                                   <div className="font-mono text-white bg-slate-900/50 p-2 rounded">
-                                    #{pool.blockNumber.toLocaleString()}
+                                    #{safeToLocaleString(pool.blockNumber)}
                                   </div>
                                 </div>
                               </>

@@ -1,43 +1,36 @@
 import { ethers } from "ethers"
 
+const BASE_RPC = "https://mainnet.base.org"
+
 async function checkWalletBalance(address: string): Promise<void> {
   try {
     console.log("🔍 Checking wallet balance on Base chain...")
-    console.log(`Address: ${address}`)
+    console.log(`📍 Address: ${address}`)
     console.log("")
 
-    // Connect to Base mainnet
-    const provider = new ethers.JsonRpcProvider("https://mainnet.base.org")
+    const provider = new ethers.JsonRpcProvider(BASE_RPC)
 
     // Get network info
     const network = await provider.getNetwork()
-    const blockNumber = await provider.getBlockNumber()
-
-    console.log(`📡 Connected to Base Chain (ID: ${network.chainId})`)
-    console.log(`📊 Current Block: ${blockNumber.toLocaleString()}`)
-    console.log("")
+    console.log(`🌐 Network: Base (Chain ID: ${network.chainId})`)
 
     // Get balance
     const balance = await provider.getBalance(address)
-    const balanceInEth = ethers.formatEther(balance)
+    const balanceEth = ethers.formatEther(balance)
 
-    console.log("💰 WALLET BALANCE:")
-    console.log(`ETH: ${balanceInEth}`)
-    console.log(`Wei: ${balance.toString()}`)
-    console.log("")
+    console.log(`💰 Balance: ${balanceEth} ETH`)
 
-    if (Number.parseFloat(balanceInEth) > 0) {
-      console.log("✅ Wallet has funds - ready for testing!")
-      console.log("📋 Next steps:")
-      console.log("1. Copy the private key to bot configuration")
-      console.log("2. Enable 'Real Mode' in the bot")
-      console.log("3. Start the bot to test live detection")
+    // Get transaction count
+    const txCount = await provider.getTransactionCount(address)
+    console.log(`📊 Transaction Count: ${txCount}`)
+
+    // Check if wallet has enough for testing
+    const minBalance = 0.001
+    if (Number.parseFloat(balanceEth) >= minBalance) {
+      console.log("✅ Wallet has sufficient balance for testing!")
     } else {
-      console.log("⚠️  Wallet is empty")
-      console.log("📋 To fund the wallet:")
-      console.log("1. Send 0.001-0.01 ETH to the address above")
-      console.log("2. Use Base chain (not Ethereum mainnet)")
-      console.log("3. Wait for confirmation, then run this script again")
+      console.log(`⚠️  Wallet needs at least ${minBalance} ETH for testing`)
+      console.log("💡 Send some ETH to this address on Base chain")
     }
   } catch (error) {
     console.error("❌ Error checking balance:", error)
@@ -48,13 +41,13 @@ async function checkWalletBalance(address: string): Promise<void> {
 const address = process.argv[2]
 
 if (!address) {
-  console.log("❌ Please provide a wallet address")
-  console.log("Usage: npm run check-balance YOUR_WALLET_ADDRESS")
+  console.log("Usage: npm run check-balance <wallet-address>")
+  console.log("Example: npm run check-balance 0x1234...")
   process.exit(1)
 }
 
 if (!ethers.isAddress(address)) {
-  console.log("❌ Invalid wallet address format")
+  console.log("❌ Invalid Ethereum address")
   process.exit(1)
 }
 

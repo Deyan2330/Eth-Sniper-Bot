@@ -17,3 +17,9 @@ export const STORAGE_SETTINGS = {
   LOGS_FILE: "./data/system_logs.txt",
   MAX_POOLS_IN_MEMORY: 1000,
 }
+
+export const CHAIN_CONFIG = {
+  BASE_CHAIN_ID: 8453,
+  BLOCK_TIME: 2, // seconds
+  CONFIRMATION_BLOCKS: 1,
+}

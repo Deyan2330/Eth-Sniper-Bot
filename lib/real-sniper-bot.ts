@@ -130,7 +130,7 @@ export class RealUniswapListener {
       const blockNumber = await this.provider.getBlockNumber()
 
       onLog(`✅ Connected to Base Chain (ID: ${network.chainId})`)
-      onLog(`📊 Current Block: ${blockNumber.toLocaleString()}`)
+      onLog(`📊 Current Block: ${blockNumber?.toLocaleString() || "Unknown"}`)
 
       this.isActive = true
       this.startTime = new Date()
@@ -162,8 +162,8 @@ export class RealUniswapListener {
             fee: Number(fee),
             tickSpacing: Number(tickSpacing),
             poolAddress: pool,
-            blockNumber: event.blockNumber,
-            transactionHash: event.transactionHash,
+            blockNumber: event?.blockNumber || 0,
+            transactionHash: event?.transactionHash || "",
             timestamp: new Date().toISOString(),
             token0Info: token0Info.status === "fulfilled" ? token0Info.value || undefined : undefined,
             token1Info: token1Info.status === "fulfilled" ? token1Info.value || undefined : undefined,
@@ -232,7 +232,6 @@ export class RealUniswapListener {
     return { ...this.stats }
   }
 
-  // Fixed method name - was causing the error
   isListening(): boolean {
     return this.isActive
   }

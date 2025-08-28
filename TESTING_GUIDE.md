@@ -1,143 +1,181 @@
 # 🧪 Uniswap Sniper Bot Testing Guide
 
-## 🚀 Quick Start Testing
+## 🎯 Overview
+This guide will help you safely test the real Base chain detection functionality using a test wallet with minimal funds.
+
+## ⚠️ IMPORTANT SECURITY WARNINGS
+
+- **NEVER use real trading funds for testing**
+- **Only use 0.001-0.01 ETH for testing**
+- **Delete test wallets after use**
+- **This is for MONITORING ONLY - no actual trading**
+
+## 🚀 Quick Start
 
 ### Step 1: Generate Test Wallet
 \`\`\`bash
 npm run generate-wallet
 \`\`\`
-This creates a secure test wallet with:
-- ✅ New wallet address
-- ✅ Private key for bot configuration  
-- ✅ Mnemonic phrase for backup
-- ✅ Saved to `./data/test_wallet.json`
 
-### Step 2: Test Base Chain Connection
-\`\`\`bash
-npm run test-connection
-\`\`\`
-This verifies:
-- ✅ Base chain accessibility
-- ✅ Multiple RPC endpoints
-- ✅ Uniswap V3 Factory contract
-- ✅ Recent pool activity
+This creates:
+- ✅ New test wallet with private key
+- ✅ Saves wallet info to `test-wallet.json`
+- ✅ Displays address and private key
 
-### Step 3: Fund Test Wallet
-Send **0.001-0.01 ETH** to your test wallet address on **Base chain**:
-- 🌐 Use Base mainnet (not Ethereum)
-- 💰 Small amount only (0.001-0.01 ETH)
-- ⚡ Wait for confirmation
+### Step 2: Fund Test Wallet
+1. Copy the generated wallet address
+2. Send **0.001-0.01 ETH** to this address on **Base chain**
+3. Use a bridge like [Base Bridge](https://bridge.base.org) if needed
 
-### Step 4: Check Wallet Balance
+### Step 3: Verify Balance
 \`\`\`bash
 npm run check-balance YOUR_WALLET_ADDRESS
 \`\`\`
-Verifies:
-- ✅ Wallet has funds
-- ✅ Connection to Base chain
-- ✅ Ready for testing
+
+Example:
+\`\`\`bash
+npm run check-balance 0x1234567890123456789012345678901234567890
+\`\`\`
+
+### Step 4: Test Connection
+\`\`\`bash
+npm run test-connection
+\`\`\`
+
+This verifies:
+- ✅ Base chain connectivity
+- ✅ Uniswap V3 factory access
+- ✅ Recent pool activity
 
 ### Step 5: Configure Bot
-1. Copy private key from generated wallet
-2. Paste into bot configuration
-3. Enable "🔴 REAL MODE"
-4. Set RPC URL: `https://mainnet.base.org`
+1. Open the bot interface
+2. Go to **Configuration** tab
+3. Enable **🔴 REAL MODE**
+4. Paste your test wallet's **private key**
+5. Set RPC URL (default: `https://mainnet.base.org`)
 
-### Step 6: Start Real Testing
-1. Click "Initialize System"
-2. Watch "Live Pools" tab
-3. Monitor "System Logs" for activity
-4. See real Uniswap V3 pools appear!
-
-## 🛡️ Security Best Practices
-
-### ⚠️ CRITICAL WARNINGS
-- **NEVER** use test wallets for real trading
-- **ONLY** send small amounts (0.001-0.01 ETH)
-- **DELETE** test wallets after testing
-- **NEVER** share private keys publicly
-
-### 🔒 Safe Testing Rules
-1. **Test Environment Only** - These wallets are for testing
-2. **Small Amounts** - Never risk significant funds
-3. **Base Chain Only** - Use correct network
-4. **Temporary Use** - Delete after testing
-5. **No Real Trading** - Monitoring only
+### Step 6: Start Real Detection
+1. Click **"Initialize System"**
+2. Watch the **Live Pools** tab
+3. Monitor **System Logs** for activity
 
 ## 📊 Expected Results
 
 When working correctly, you should see:
 
-### ✅ Connection Status
-- Status: "Connected"
-- Network: "Base Mainnet" 
-- Runtime: Active timer
-- Pools: Increasing count
-
-### ✅ Live Pool Detection
-- Real token symbols (USDC, WETH, etc.)
-- Actual block numbers
-- Transaction hashes
-- Fee tiers (0.05%, 0.3%, 1%)
-
-### ✅ System Logs
+### In System Logs:
 \`\`\`
-🔗 Connected to Base mainnet
+🔍 Testing Base chain connection...
+✅ Connected to Base Chain (ID: 8453)
+📊 Current Block: 12,345,678
 👂 Listening for Uniswap V3 pool creation events...
-🎯 New pool detected: 0x1234...
+✅ Real-time listener is now active!
+🎯 New pool detected: 0xabc123...
 ✅ Pool: USDC/WETH | Fee: 0.3%
 \`\`\`
+
+### In Live Pools Tab:
+- Real pool addresses
+- Token symbols (USDC, WETH, etc.)
+- Fee tiers (0.05%, 0.3%, 1%)
+- Block numbers and timestamps
+- Transaction hashes
 
 ## 🔧 Troubleshooting
 
 ### Connection Issues
-- Try different RPC endpoints
-- Check wallet has funds
-- Verify Base chain (not Ethereum)
-- Check internet connection
+\`\`\`bash
+# Test connection first
+npm run test-connection
 
-### No Pools Detected
-- Pool creation is sporadic
-- Wait 10-30 minutes for activity
-- Check system logs for errors
-- Verify Uniswap V3 Factory connection
+# Check wallet balance
+npm run check-balance YOUR_ADDRESS
+\`\`\`
 
-### Balance Issues
-- Ensure using Base chain
-- Wait for transaction confirmation
-- Check correct wallet address
-- Verify sufficient gas
+### Common Problems:
 
-## 🎯 Testing Checklist
+1. **"Connection failed"**
+   - Check internet connection
+   - Try different RPC URL
+   - Verify Base chain accessibility
 
-- [ ] Generated test wallet
-- [ ] Tested Base connection
-- [ ] Funded wallet (0.001+ ETH)
-- [ ] Verified balance
-- [ ] Configured bot with private key
-- [ ] Enabled Real Mode
-- [ ] Started bot successfully
-- [ ] Seeing live pool detection
-- [ ] Monitoring system logs
-- [ ] Ready to delete test wallet
+2. **"Insufficient balance"**
+   - Send more ETH to test wallet
+   - Minimum 0.001 ETH required
+
+3. **"No pools detected"**
+   - Pool creation is sporadic
+   - Wait 10-30 minutes for activity
+   - Check system logs for errors
+
+## 🛡️ Security Best Practices
+
+### ✅ DO:
+- Use test wallets only
+- Use minimal amounts (0.001-0.01 ETH)
+- Delete test files after use
+- Monitor system logs
+- Test on Base mainnet only
+
+### ❌ DON'T:
+- Use real trading wallets
+- Store large amounts
+- Share private keys
+- Use for actual trading
+- Leave test files on system
+
+## 📁 Generated Files
+
+The testing process creates:
+
+\`\`\`
+test-wallet.json          # Test wallet info (DELETE after use)
+data/detected_pools.json  # Pool detection history
+data/system_logs.txt      # System activity logs
+\`\`\`
 
 ## 🧹 Cleanup After Testing
 
-1. **Stop the bot**
-2. **Clear private key** from configuration
-3. **Delete** `./data/test_wallet.json`
-4. **Transfer remaining ETH** to main wallet (optional)
-5. **Never use test wallet again**
+1. **Stop the bot** if running
+2. **Delete test wallet file:**
+   \`\`\`bash
+   rm test-wallet.json
+   \`\`\`
+3. **Clear sensitive data** from configuration
+4. **Optional:** Clear detection history:
+   \`\`\`bash
+   rm -rf data/
+   \`\`\`
+
+## 🆘 Support
+
+If you encounter issues:
+
+1. Check the troubleshooting section above
+2. Verify all prerequisites are met
+3. Test connection independently
+4. Review system logs for errors
+
+## 📈 Performance Expectations
+
+- **Connection Time:** 2-5 seconds
+- **Pool Detection:** Real-time (within 1-2 blocks)
+- **Token Info:** 3-5 seconds per token
+- **Memory Usage:** ~50-100MB
+- **Network Usage:** Minimal (event-based)
+
+## 🎯 Success Metrics
+
+You'll know it's working when:
+- ✅ Base chain connection established
+- ✅ Real pool addresses appearing
+- ✅ Token symbols resolved (USDC, WETH, etc.)
+- ✅ Block numbers incrementing
+- ✅ Timestamps showing recent activity
 
 ---
 
-## 📞 Support
+**Remember: This is for TESTING and MONITORING only. Never use for actual trading without proper security measures and testing!**
+\`\`\`
 
-If you encounter issues:
-1. Check this guide first
-2. Verify all steps completed
-3. Check system logs for errors
-4. Ensure using Base chain (not Ethereum)
-5. Try different RPC endpoints
-
-**Remember: This is for testing only! Never use for real trading.**
+Now I need to fix the main page component to handle undefined values properly:

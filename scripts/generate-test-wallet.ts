@@ -1,70 +1,66 @@
 import { ethers } from "ethers"
-import { writeFileSync, existsSync, mkdirSync } from "fs"
+import { writeFileSync } from "fs"
 
 interface TestWallet {
   address: string
   privateKey: string
   mnemonic: string
   createdAt: string
-  network: string
 }
 
 function generateTestWallet(): TestWallet {
   // Generate a random wallet
   const wallet = ethers.Wallet.createRandom()
 
-  const testWallet: TestWallet = {
+  return {
     address: wallet.address,
     privateKey: wallet.privateKey,
     mnemonic: wallet.mnemonic?.phrase || "",
     createdAt: new Date().toISOString(),
-    network: "Base Mainnet",
   }
-
-  return testWallet
 }
 
-function saveWallet(wallet: TestWallet): void {
-  // Create data directory if it doesn't exist
-  if (!existsSync("./data")) {
-    mkdirSync("./data", { recursive: true })
-  }
-
-  // Save wallet info
+function saveWalletToFile(wallet: TestWallet): void {
   const walletData = {
     ...wallet,
-    warning: "⚠️ TEST WALLET ONLY - DO NOT USE FOR REAL TRADING ⚠️",
+    warning: "⚠️ TEST WALLET ONLY - DO NOT USE FOR REAL FUNDS ⚠️",
     instructions: [
-      "1. Send 0.001-0.01 ETH to this address on Base chain",
-      "2. Copy the private key to bot configuration",
-      "3. Enable 'Real Mode' in the bot",
-      "4. Start the bot to test live pool detection",
-      "5. DELETE this wallet after testing",
+      "1. This wallet is for TESTING ONLY",
+      "2. Send only 0.001-0.01 ETH on Base chain",
+      "3. Never use this wallet for real trading",
+      "4. Delete this file after testing",
     ],
   }
 
-  writeFileSync("./data/test_wallet.json", JSON.stringify(walletData, null, 2))
-
-  console.log("🎯 TEST WALLET GENERATED")
-  console.log("========================")
-  console.log(`Address: ${wallet.address}`)
-  console.log(`Private Key: ${wallet.privateKey}`)
-  console.log(`Mnemonic: ${wallet.mnemonic}`)
-  console.log("")
-  console.log("⚠️  IMPORTANT SECURITY NOTES:")
-  console.log("• This is a TEST wallet only")
-  console.log("• Only send small amounts (0.001-0.01 ETH)")
-  console.log("• Never use for real trading")
-  console.log("• Delete after testing")
-  console.log("")
-  console.log("📋 NEXT STEPS:")
-  console.log("1. Send 0.001 ETH to the address above on Base chain")
-  console.log("2. Copy the private key to bot configuration")
-  console.log("3. Enable 'Real Mode' and start the bot")
-  console.log("")
-  console.log("💾 Wallet saved to: ./data/test_wallet.json")
+  writeFileSync("test-wallet.json", JSON.stringify(walletData, null, 2))
 }
 
-// Generate and save the test wallet
+// Generate and save test wallet
+console.log("🔐 Generating Test Wallet for Base Chain...")
+console.log("⚠️  WARNING: This is for TESTING ONLY!")
+console.log("")
+
 const testWallet = generateTestWallet()
-saveWallet(testWallet)
+
+console.log("✅ Test Wallet Generated:")
+console.log(`📍 Address: ${testWallet.address}`)
+console.log(`🔑 Private Key: ${testWallet.privateKey}`)
+console.log(`🎯 Mnemonic: ${testWallet.mnemonic}`)
+console.log("")
+
+console.log("📋 Next Steps:")
+console.log("1. Send 0.001-0.01 ETH to this address on Base chain")
+console.log("2. Copy the private key to bot configuration")
+console.log("3. Enable 'Real Mode' in the bot")
+console.log("4. Start the bot to test live detection")
+console.log("")
+
+console.log("🛡️  SECURITY REMINDERS:")
+console.log("- This is a TEST wallet only")
+console.log("- Never use for real trading")
+console.log("- Use minimal amounts (0.001-0.01 ETH)")
+console.log("- Delete after testing")
+
+// Save to file
+saveWalletToFile(testWallet)
+console.log("💾 Wallet saved to: test-wallet.json")
