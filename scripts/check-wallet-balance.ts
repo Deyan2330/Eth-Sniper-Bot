@@ -1,54 +1,69 @@
 import { ethers } from "ethers"
 
-const BASE_RPC = "https://mainnet.base.org"
+const BASE_RPC_URL = "https://mainnet.base.org"
 
-async function checkWalletBalance(address: string): Promise<void> {
+async function checkBalance(address: string) {
   try {
-    console.log("🔍 Checking wallet balance on Base chain...")
+    console.log("🔍 Checking wallet balance on Base Chain...")
     console.log(`📍 Address: ${address}`)
-    console.log("")
 
-    const provider = new ethers.JsonRpcProvider(BASE_RPC)
+    const provider = new ethers.JsonRpcProvider(BASE_RPC_URL)
 
     // Get network info
     const network = await provider.getNetwork()
     console.log(`🌐 Network: Base (Chain ID: ${network.chainId})`)
 
-    // Get balance
+    // Get current block
+    const blockNumber = await provider.getBlockNumber()
+    console.log(`📊 Current Block: ${blockNumber.toLocaleString()}`)
+
+    // Get ETH balance
     const balance = await provider.getBalance(address)
-    const balanceEth = ethers.formatEther(balance)
+    const ethBalance = ethers.formatEther(balance)
 
-    console.log(`💰 Balance: ${balanceEth} ETH`)
+    console.log("\n💰 Balance Information:")
+    console.log("=" * 40)
+    console.log(`ETH Balance: ${ethBalance} ETH`)
+    console.log(`Wei Balance: ${balance.toString()} wei`)
 
-    // Get transaction count
-    const txCount = await provider.getTransactionCount(address)
-    console.log(`📊 Transaction Count: ${txCount}`)
-
-    // Check if wallet has enough for testing
-    const minBalance = 0.001
-    if (Number.parseFloat(balanceEth) >= minBalance) {
-      console.log("✅ Wallet has sufficient balance for testing!")
+    // Check if wallet has any balance
+    if (balance > 0n) {
+      console.log("✅ Wallet has funds!")
+      const usdValue = Number.parseFloat(ethBalance) * 2000 // Rough ETH price estimate
+      console.log(`💵 Estimated Value: ~$${usdValue.toFixed(2)} USD`)
     } else {
-      console.log(`⚠️  Wallet needs at least ${minBalance} ETH for testing`)
-      console.log("💡 Send some ETH to this address on Base chain")
+      console.log("❌ Wallet is empty")
+      console.log("\n💡 To fund this wallet:")
+      console.log("• Send ETH to this address on Base network")
+      console.log("• Use a Base-compatible wallet (MetaMask, etc.)")
+      console.log("• Bridge from Ethereum mainnet to Base")
     }
+
+    // Get transaction count (nonce)
+    const txCount = await provider.getTransactionCount(address)
+    console.log(`📝 Transaction Count: ${txCount}`)
+
+    console.log("\n🔗 Useful Links:")
+    console.log(`• BaseScan: https://basescan.org/address/${address}`)
+    console.log(`• Base Bridge: https://bridge.base.org/`)
   } catch (error) {
     console.error("❌ Error checking balance:", error)
+    process.exit(1)
   }
 }
 
-// Get address from command line argument
+// Get address from command line arguments
 const address = process.argv[2]
 
 if (!address) {
-  console.log("Usage: npm run check-balance <wallet-address>")
-  console.log("Example: npm run check-balance 0x1234...")
+  console.error("❌ Please provide a wallet address")
+  console.log("Usage: npm run check-balance <ADDRESS>")
   process.exit(1)
 }
 
 if (!ethers.isAddress(address)) {
-  console.log("❌ Invalid Ethereum address")
+  console.error("❌ Invalid Ethereum address")
   process.exit(1)
 }
 
-checkWalletBalance(address)
+checkBalance(address)

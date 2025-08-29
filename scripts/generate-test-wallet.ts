@@ -1,14 +1,14 @@
 import { ethers } from "ethers"
-import { writeFileSync } from "fs"
+import * as fs from "fs"
 
-interface TestWallet {
+interface WalletInfo {
   address: string
   privateKey: string
   mnemonic: string
-  createdAt: string
+  publicKey: string
 }
 
-function generateTestWallet(): TestWallet {
+function generateTestWallet(): WalletInfo {
   // Generate a random wallet
   const wallet = ethers.Wallet.createRandom()
 
@@ -16,51 +16,42 @@ function generateTestWallet(): TestWallet {
     address: wallet.address,
     privateKey: wallet.privateKey,
     mnemonic: wallet.mnemonic?.phrase || "",
-    createdAt: new Date().toISOString(),
+    publicKey: wallet.publicKey,
   }
 }
 
-function saveWalletToFile(wallet: TestWallet): void {
+function saveWalletToFile(wallet: WalletInfo) {
   const walletData = {
     ...wallet,
-    warning: "⚠️ TEST WALLET ONLY - DO NOT USE FOR REAL FUNDS ⚠️",
-    instructions: [
-      "1. This wallet is for TESTING ONLY",
-      "2. Send only 0.001-0.01 ETH on Base chain",
-      "3. Never use this wallet for real trading",
-      "4. Delete this file after testing",
-    ],
+    network: "Base Mainnet",
+    chainId: 8453,
+    createdAt: new Date().toISOString(),
+    warning: "⚠️ NEVER share your private key! This is for testing only.",
   }
 
-  writeFileSync("test-wallet.json", JSON.stringify(walletData, null, 2))
+  const filename = `test-wallet-${Date.now()}.json`
+  fs.writeFileSync(filename, JSON.stringify(walletData, null, 2))
+  return filename
 }
 
-// Generate and save test wallet
+// Generate and save wallet
 console.log("🔐 Generating Test Wallet for Base Chain...")
-console.log("⚠️  WARNING: This is for TESTING ONLY!")
-console.log("")
+const wallet = generateTestWallet()
+const filename = saveWalletToFile(wallet)
 
-const testWallet = generateTestWallet()
-
-console.log("✅ Test Wallet Generated:")
-console.log(`📍 Address: ${testWallet.address}`)
-console.log(`🔑 Private Key: ${testWallet.privateKey}`)
-console.log(`🎯 Mnemonic: ${testWallet.mnemonic}`)
-console.log("")
-
-console.log("📋 Next Steps:")
-console.log("1. Send 0.001-0.01 ETH to this address on Base chain")
-console.log("2. Copy the private key to bot configuration")
-console.log("3. Enable 'Real Mode' in the bot")
-console.log("4. Start the bot to test live detection")
-console.log("")
-
-console.log("🛡️  SECURITY REMINDERS:")
-console.log("- This is a TEST wallet only")
-console.log("- Never use for real trading")
-console.log("- Use minimal amounts (0.001-0.01 ETH)")
-console.log("- Delete after testing")
-
-// Save to file
-saveWalletToFile(testWallet)
-console.log("💾 Wallet saved to: test-wallet.json")
+console.log("\n✅ Test Wallet Generated Successfully!")
+console.log("=" * 50)
+console.log(`📁 Saved to: ${filename}`)
+console.log(`📍 Address: ${wallet.address}`)
+console.log(`🔑 Private Key: ${wallet.privateKey}`)
+console.log(`🌱 Mnemonic: ${wallet.mnemonic}`)
+console.log("=" * 50)
+console.log("\n⚠️  SECURITY WARNING:")
+console.log("• This wallet is for TESTING ONLY")
+console.log("• Never use this on mainnet with real funds")
+console.log("• Keep your private key secure")
+console.log("• Fund with small amounts only")
+console.log("\n💰 To fund this wallet:")
+console.log("• Use Base testnet faucet")
+console.log("• Or send small amount of ETH on Base mainnet")
+console.log(`• Check balance: npm run check-balance ${wallet.address}`)

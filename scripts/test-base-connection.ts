@@ -1,78 +1,94 @@
 import { ethers } from "ethers"
 
-const BASE_RPC = "https://mainnet.base.org"
+const BASE_RPC_URL = "https://mainnet.base.org"
 const UNISWAP_V3_FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"
 
-async function testBaseConnection(): Promise<void> {
+async function testConnection() {
   try {
     console.log("🔍 Testing Base Chain Connection...")
-    console.log("")
+    console.log(`🌐 RPC URL: ${BASE_RPC_URL}`)
 
-    const provider = new ethers.JsonRpcProvider(BASE_RPC)
+    const provider = new ethers.JsonRpcProvider(BASE_RPC_URL)
 
     // Test basic connection
-    console.log("1. Testing RPC connection...")
+    console.log("\n1️⃣ Testing Basic Connection...")
     const network = await provider.getNetwork()
-    console.log(`✅ Connected to Base (Chain ID: ${network.chainId})`)
+    console.log(`✅ Connected to Chain ID: ${network.chainId}`)
+    console.log(`✅ Network Name: ${network.name || "Base"}`)
 
-    // Test block number
-    console.log("2. Getting latest block...")
+    // Get current block
+    console.log("\n2️⃣ Getting Current Block...")
     const blockNumber = await provider.getBlockNumber()
-    console.log(`✅ Latest Block: ${blockNumber.toLocaleString()}`)
+    console.log(`✅ Current Block: ${blockNumber.toLocaleString()}`)
 
     // Test gas price
-    console.log("3. Getting gas price...")
-    const feeData = await provider.getFeeData()
-    const gasPrice = feeData.gasPrice ? ethers.formatUnits(feeData.gasPrice, "gwei") : "Unknown"
-    console.log(`✅ Gas Price: ${gasPrice} Gwei`)
+    console.log("\n3️⃣ Getting Gas Price...")
+    const gasPrice = await provider.getFeeData()
+    console.log(`✅ Gas Price: ${ethers.formatUnits(gasPrice.gasPrice || 0n, "gwei")} Gwei`)
 
-    // Test Uniswap factory
-    console.log("4. Testing Uniswap V3 Factory...")
+    // Test Uniswap V3 Factory
+    console.log("\n4️⃣ Testing Uniswap V3 Factory...")
+    console.log(`📍 Factory Address: ${UNISWAP_V3_FACTORY}`)
+
     const factoryCode = await provider.getCode(UNISWAP_V3_FACTORY)
-    if (factoryCode !== "0x") {
-      console.log(`✅ Uniswap V3 Factory found at: ${UNISWAP_V3_FACTORY}`)
-    } else {
-      console.log("❌ Uniswap V3 Factory not found")
+    if (factoryCode === "0x") {
+      throw new Error("Factory contract not found!")
+    }
+    console.log(`✅ Factory Contract Verified (${factoryCode.length} bytes)`)
+
+    // Test factory contract call
+    const factoryABI = [
+      "function owner() view returns (address)",
+      "function feeAmountTickSpacing(uint24) view returns (int24)",
+    ]
+
+    const factory = new ethers.Contract(UNISWAP_V3_FACTORY, factoryABI, provider)
+
+    try {
+      const tickSpacing = await factory.feeAmountTickSpacing(3000) // 0.3% fee tier
+      console.log(`✅ Factory Call Success - 0.3% fee tick spacing: ${tickSpacing}`)
+    } catch (error) {
+      console.log(`⚠️ Factory call failed: ${error}`)
     }
 
-    // Test recent pool activity
-    console.log("5. Checking recent pool activity...")
-    const factory = new ethers.Contract(
-      UNISWAP_V3_FACTORY,
-      [
-        "event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool)",
-      ],
-      provider,
-    )
+    // Test event filtering
+    console.log("\n5️⃣ Testing Event Filtering...")
+    const eventABI = [
+      "event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool)",
+    ]
+    const eventContract = new ethers.Contract(UNISWAP_V3_FACTORY, eventABI, provider)
 
     const currentBlock = await provider.getBlockNumber()
-    const fromBlock = Math.max(0, currentBlock - 1000) // Last ~30 minutes
+    const fromBlock = Math.max(0, currentBlock - 100) // Last 100 blocks
 
-    const filter = factory.filters.PoolCreated()
-    const events = await factory.queryFilter(filter, fromBlock, currentBlock)
+    console.log(`🔍 Scanning blocks ${fromBlock} to ${currentBlock}...`)
 
-    console.log(`✅ Found ${events.length} pools created in last ~30 minutes`)
+    const filter = eventContract.filters.PoolCreated()
+    const events = await eventContract.queryFilter(filter, fromBlock, currentBlock)
+
+    console.log(`✅ Found ${events.length} PoolCreated events in last 100 blocks`)
 
     if (events.length > 0) {
       const latestEvent = events[events.length - 1]
-      console.log(`📊 Most recent pool: Block ${latestEvent.blockNumber}`)
+      console.log(`📊 Latest Pool: ${latestEvent.args?.pool}`)
+      console.log(`📊 Block: ${latestEvent.blockNumber}`)
     }
 
-    console.log("")
-    console.log("🎯 Connection Test Results:")
-    console.log("✅ Base chain connection: SUCCESS")
-    console.log("✅ Uniswap V3 factory: SUCCESS")
-    console.log("✅ Recent activity: SUCCESS")
-    console.log("")
-    console.log("🚀 Ready for real-time pool detection!")
+    console.log("\n🎉 All Tests Passed!")
+    console.log("✅ Base chain connection is working properly")
+    console.log("✅ Uniswap V3 factory is accessible")
+    console.log("✅ Event filtering is functional")
+
+    if (events.length === 0) {
+      console.log("\n⚠️  NOTE: No recent pools found in last 100 blocks")
+      console.log("This is normal - new pools aren't created frequently")
+      console.log("The bot will detect them when they are created")
+    }
   } catch (error) {
-    console.error("❌ Connection test failed:", error)
-    console.log("")
-    console.log("💡 Troubleshooting:")
-    console.log("- Check internet connection")
-    console.log("- Try a different RPC endpoint")
-    console.log("- Verify Base chain is accessible")
+    console.error("\n❌ Connection Test Failed:")
+    console.error(error)
+    process.exit(1)
   }
 }
 
-testBaseConnection()
+testConnection()

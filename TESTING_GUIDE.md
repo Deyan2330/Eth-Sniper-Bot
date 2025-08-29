@@ -1,181 +1,133 @@
 # 🧪 Uniswap Sniper Bot Testing Guide
 
-## 🎯 Overview
-This guide will help you safely test the real Base chain detection functionality using a test wallet with minimal funds.
+## 🚀 Quick Start Testing
 
-## ⚠️ IMPORTANT SECURITY WARNINGS
-
-- **NEVER use real trading funds for testing**
-- **Only use 0.001-0.01 ETH for testing**
-- **Delete test wallets after use**
-- **This is for MONITORING ONLY - no actual trading**
-
-## 🚀 Quick Start
-
-### Step 1: Generate Test Wallet
+### 1. Generate Test Wallet
 \`\`\`bash
 npm run generate-wallet
 \`\`\`
+This creates a new wallet with:
+- ✅ Private key for testing
+- ✅ Public address
+- ✅ Mnemonic phrase
+- ✅ Saved to JSON file
 
-This creates:
-- ✅ New test wallet with private key
-- ✅ Saves wallet info to `test-wallet.json`
-- ✅ Displays address and private key
+### 2. Test Base Chain Connection
+\`\`\`bash
+npm run test-connection
+\`\`\`
+This verifies:
+- ✅ RPC connection to Base
+- ✅ Current block number
+- ✅ Uniswap V3 factory access
+- ✅ Event filtering capability
+- ✅ Recent pool detection
 
-### Step 2: Fund Test Wallet
-1. Copy the generated wallet address
-2. Send **0.001-0.01 ETH** to this address on **Base chain**
-3. Use a bridge like [Base Bridge](https://bridge.base.org) if needed
-
-### Step 3: Verify Balance
+### 3. Check Wallet Balance
 \`\`\`bash
 npm run check-balance YOUR_WALLET_ADDRESS
 \`\`\`
+This shows:
+- ✅ ETH balance on Base
+- ✅ Transaction count
+- ✅ USD value estimate
+- ✅ BaseScan link
 
-Example:
-\`\`\`bash
-npm run check-balance 0x1234567890123456789012345678901234567890
-\`\`\`
+## 🔧 Debugging No Pools Found
 
-### Step 4: Test Connection
+### Issue: Bot runs 23+ hours with no pools detected
+
+**Possible Causes:**
+1. **Wrong Factory Address** - Verify Uniswap V3 factory
+2. **RPC Connection Issues** - Test with different providers
+3. **Event Listener Problems** - Check WebSocket vs HTTP
+4. **Low Pool Creation Rate** - Base has fewer new pools than Ethereum
+
+### 🔍 Diagnostic Steps:
+
+#### Step 1: Verify Factory Address
 \`\`\`bash
 npm run test-connection
 \`\`\`
+Should show:
+- ✅ Factory contract verified
+- ✅ Recent events found (even if 0)
 
-This verifies:
-- ✅ Base chain connectivity
-- ✅ Uniswap V3 factory access
-- ✅ Recent pool activity
+#### Step 2: Check Historical Pools
+The bot now scans last 1000 blocks for existing pools to verify the system works.
 
-### Step 5: Configure Bot
-1. Open the bot interface
-2. Go to **Configuration** tab
-3. Enable **🔴 REAL MODE**
-4. Paste your test wallet's **private key**
-5. Set RPC URL (default: `https://mainnet.base.org`)
+#### Step 3: Monitor Connection
+- Check "System Status" shows "Connected"
+- Verify "Current Block" is updating
+- Watch "Events Listened" counter
 
-### Step 6: Start Real Detection
-1. Click **"Initialize System"**
-2. Watch the **Live Pools** tab
-3. Monitor **System Logs** for activity
+#### Step 4: Try Different RPC
+Update in Configuration:
+- **Free**: `https://mainnet.base.org`
+- **Alchemy**: `https://base-mainnet.g.alchemy.com/v2/YOUR_KEY`
+- **QuickNode**: `https://base-mainnet.quiknode.pro/YOUR_ENDPOINT`
 
-## 📊 Expected Results
+## 📊 Expected Behavior
 
-When working correctly, you should see:
+### Normal Operation:
+- ✅ Connects to Base chain
+- ✅ Shows current block updates
+- ✅ Finds historical pools in recent blocks
+- ✅ Waits for new pool creation events
 
-### In System Logs:
+### Pool Creation Frequency:
+- **Ethereum**: 10-50 pools/day
+- **Base**: 1-10 pools/day (much lower)
+- **Peak times**: More activity during US hours
+
+## 🚨 Troubleshooting
+
+### Connection Issues:
 \`\`\`
-🔍 Testing Base chain connection...
-✅ Connected to Base Chain (ID: 8453)
-📊 Current Block: 12,345,678
-👂 Listening for Uniswap V3 pool creation events...
-✅ Real-time listener is now active!
-🎯 New pool detected: 0xabc123...
-✅ Pool: USDC/WETH | Fee: 0.3%
+❌ Provider Error: network does not support ENS
 \`\`\`
+**Fix**: Use different RPC endpoint
 
-### In Live Pools Tab:
-- Real pool addresses
-- Token symbols (USDC, WETH, etc.)
-- Fee tiers (0.05%, 0.3%, 1%)
-- Block numbers and timestamps
-- Transaction hashes
-
-## 🔧 Troubleshooting
-
-### Connection Issues
-\`\`\`bash
-# Test connection first
-npm run test-connection
-
-# Check wallet balance
-npm run check-balance YOUR_ADDRESS
+### No Historical Pools:
 \`\`\`
-
-### Common Problems:
-
-1. **"Connection failed"**
-   - Check internet connection
-   - Try different RPC URL
-   - Verify Base chain accessibility
-
-2. **"Insufficient balance"**
-   - Send more ETH to test wallet
-   - Minimum 0.001 ETH required
-
-3. **"No pools detected"**
-   - Pool creation is sporadic
-   - Wait 10-30 minutes for activity
-   - Check system logs for errors
-
-## 🛡️ Security Best Practices
-
-### ✅ DO:
-- Use test wallets only
-- Use minimal amounts (0.001-0.01 ETH)
-- Delete test files after use
-- Monitor system logs
-- Test on Base mainnet only
-
-### ❌ DON'T:
-- Use real trading wallets
-- Store large amounts
-- Share private keys
-- Use for actual trading
-- Leave test files on system
-
-## 📁 Generated Files
-
-The testing process creates:
-
+📊 Found 0 pool creation events in recent blocks
 \`\`\`
-test-wallet.json          # Test wallet info (DELETE after use)
-data/detected_pools.json  # Pool detection history
-data/system_logs.txt      # System activity logs
+**Normal**: Base has low pool creation rate
+
+### Event Listener Silent:
 \`\`\`
-
-## 🧹 Cleanup After Testing
-
-1. **Stop the bot** if running
-2. **Delete test wallet file:**
-   \`\`\`bash
-   rm test-wallet.json
-   \`\`\`
-3. **Clear sensitive data** from configuration
-4. **Optional:** Clear detection history:
-   \`\`\`bash
-   rm -rf data/
-   \`\`\`
-
-## 🆘 Support
-
-If you encounter issues:
-
-1. Check the troubleshooting section above
-2. Verify all prerequisites are met
-3. Test connection independently
-4. Review system logs for errors
-
-## 📈 Performance Expectations
-
-- **Connection Time:** 2-5 seconds
-- **Pool Detection:** Real-time (within 1-2 blocks)
-- **Token Info:** 3-5 seconds per token
-- **Memory Usage:** ~50-100MB
-- **Network Usage:** Minimal (event-based)
-
-## 🎯 Success Metrics
-
-You'll know it's working when:
-- ✅ Base chain connection established
-- ✅ Real pool addresses appearing
-- ✅ Token symbols resolved (USDC, WETH, etc.)
-- ✅ Block numbers incrementing
-- ✅ Timestamps showing recent activity
-
----
-
-**Remember: This is for TESTING and MONITORING only. Never use for actual trading without proper security measures and testing!**
+Events Listened: 0 (after hours)
 \`\`\`
+**Check**: 
+1. RPC endpoint working
+2. WebSocket support
+3. Factory address correct
 
-Now I need to fix the main page component to handle undefined values properly:
+## 🎯 Success Indicators
+
+### ✅ Working System:
+- Connection Status: "Connected"
+- Current Block: Updates every ~2 seconds
+- Historical pools found in recent scan
+- Events Listened: Increments when pools detected
+
+### ✅ Pool Detection:
+- Real-time notification in logs
+- Pool data populated with token info
+- Transaction hash and block number
+- Token symbols resolved
+
+## 🔗 Useful Resources
+
+- **BaseScan**: https://basescan.org/
+- **Base Bridge**: https://bridge.base.org/
+- **Uniswap V3 Base**: https://app.uniswap.org/#/swap?chain=base
+- **Base Docs**: https://docs.base.org/
+
+## 📞 Support
+
+If issues persist:
+1. Check all diagnostic steps above
+2. Try different RPC providers
+3. Verify Base chain is operational
+4. Consider pool creation is naturally infrequent on Base
