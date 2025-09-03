@@ -46,3 +46,16 @@ export const TRADING_SETTINGS = {
   MAX_SLIPPAGE: 5, // %
   DEFAULT_BUY_AMOUNT: 0.01, // ETH
 }
+
+// MetaMask integration settings (for future use)
+export const METAMASK_CONFIG = {
+  CHAIN_ID: "0x2105", // Base chain ID in hex
+  CHAIN_NAME: "Base",
+  RPC_URLS: ["https://mainnet.base.org"],
+  NATIVE_CURRENCY: {
+    name: "Ethereum",
+    symbol: "ETH",
+    decimals: 18,
+  },
+  BLOCK_EXPLORER_URLS: ["https://basescan.org"],
+}

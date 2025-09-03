@@ -6,9 +6,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 // Utility functions for the sniper bot
-export function formatAddress(address: string, chars = 4): string {
+export function formatAddress(address: string, length = 6): string {
   if (!address) return ""
-  return `${address.slice(0, chars + 2)}...${address.slice(-chars)}`
+  return `${address.slice(0, length)}...${address.slice(-4)}`
 }
 
 export function formatNumber(num: number, decimals = 2): string {
@@ -20,35 +20,24 @@ export function formatNumber(num: number, decimals = 2): string {
   })
 }
 
-export function formatCurrency(amount: number, currency = "USD"): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount)
+export function formatTimeAgo(timestamp: string): string {
+  const now = new Date().getTime()
+  const time = new Date(timestamp).getTime()
+  const diff = Math.floor((now - time) / 1000)
+
+  if (diff < 60) return `${diff}s ago`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
 }
 
-export function formatTime(timestamp: string | number): string {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString("en-US", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  })
-}
-
-export function formatDuration(milliseconds: number): string {
-  const seconds = Math.floor(milliseconds / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-
-  if (days > 0) return `${days}d ${hours % 24}h`
-  if (hours > 0) return `${hours}h ${minutes % 60}m`
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`
-  return `${seconds}s`
+export function formatEther(wei: string, decimals = 4): string {
+  try {
+    const num = Number.parseFloat(wei) / Math.pow(10, 18)
+    return formatNumber(num, decimals)
+  } catch {
+    return "0"
+  }
 }
 
 export function isValidAddress(address: string): boolean {
@@ -63,60 +52,79 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+export function safeParseFloat(value: string, fallback = 0): number {
+  const parsed = Number.parseFloat(value)
+  return isNaN(parsed) ? fallback : parsed
+}
+
+export function safeParseInt(value: string, fallback = 0): number {
+  const parsed = Number.parseInt(value, 10)
+  return isNaN(parsed) ? fallback : parsed
+}
+
+// Gas price utilities
+export function gweiToWei(gwei: number): bigint {
+  return BigInt(Math.floor(gwei * 1e9))
+}
+
+export function weiToGwei(wei: bigint): number {
+  return Number(wei) / 1e9
+}
+
+// Fee tier utilities
+export function formatFeeTier(fee: number): string {
+  return `${(fee / 10000).toFixed(2)}%`
+}
+
+export function getFeeTierName(fee: number): string {
+  switch (fee) {
+    case 100:
+      return "Lowest (0.01%)"
+    case 500:
+      return "Low (0.05%)"
+    case 3000:
+      return "Medium (0.30%)"
+    case 10000:
+      return "High (1.00%)"
+    default:
+      return `Custom (${formatFeeTier(fee)})`
+  }
+}
+
+// Error handling utilities
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   if (typeof error === "string") return error
   return "An unknown error occurred"
 }
 
-export function calculateGasPrice(baseFee: bigint, priorityFee: bigint): bigint {
-  return baseFee + priorityFee
+export function logError(context: string, error: unknown): void {
+  console.error(`[${context}] ${getErrorMessage(error)}`)
 }
 
-export function formatGwei(wei: bigint): string {
-  const gwei = Number(wei) / 1e9
-  return `${gwei.toFixed(2)} Gwei`
-}
+// Validation utilities
+export function validateConfig(config: any): string[] {
+  const errors: string[] = []
 
-export function formatEther(wei: bigint, decimals = 4): string {
-  const ether = Number(wei) / 1e18
-  return `${ether.toFixed(decimals)} ETH`
-}
-
-export function parseEther(ether: string): bigint {
-  return BigInt(Math.floor(Number.parseFloat(ether) * 1e18))
-}
-
-export function calculateSlippage(amount: bigint, slippagePercent: number): bigint {
-  const slippage = BigInt(Math.floor((Number(amount) * slippagePercent) / 100))
-  return amount - slippage
-}
-
-export function getPoolFeeText(fee: number): string {
-  switch (fee) {
-    case 100:
-      return "0.01%"
-    case 500:
-      return "0.05%"
-    case 3000:
-      return "0.3%"
-    case 10000:
-      return "1%"
-    default:
-      return `${fee / 10000}%`
+  if (!config.rpcUrl) {
+    errors.push("RPC URL is required")
   }
-}
 
-export function getRiskColor(riskScore: number): string {
-  if (riskScore < 20) return "text-green-400"
-  if (riskScore < 40) return "text-yellow-400"
-  if (riskScore < 70) return "text-orange-400"
-  return "text-red-400"
-}
+  if (config.privateKey && !isValidPrivateKey(config.privateKey)) {
+    errors.push("Invalid private key format")
+  }
 
-export function getRiskBadgeColor(riskScore: number): string {
-  if (riskScore < 20) return "bg-green-900 text-green-300 border-green-600"
-  if (riskScore < 40) return "bg-yellow-900 text-yellow-300 border-yellow-600"
-  if (riskScore < 70) return "bg-orange-900 text-orange-300 border-orange-600"
-  return "bg-red-900 text-red-300 border-red-600"
+  if (config.minLiquidity && safeParseFloat(config.minLiquidity) < 0) {
+    errors.push("Minimum liquidity must be positive")
+  }
+
+  if (config.maxGasPrice && safeParseFloat(config.maxGasPrice) <= 0) {
+    errors.push("Max gas price must be positive")
+  }
+
+  if (config.slippage && (safeParseFloat(config.slippage) < 0 || safeParseFloat(config.slippage) > 100)) {
+    errors.push("Slippage must be between 0 and 100")
+  }
+
+  return errors
 }

@@ -66,9 +66,12 @@ export class RealUniswapListener {
   private currentBlock = 0
 
   constructor(rpcUrl: string) {
-    this.provider = new ethers.JsonRpcProvider(rpcUrl, undefined, {
-      staticNetwork: ethers.Network.from(8453), // Base chain ID
+    // Create provider without MetaMask - pure RPC connection
+    this.provider = new ethers.JsonRpcProvider(rpcUrl, {
+      chainId: 8453,
+      name: "base",
     })
+
     this.factory = new ethers.Contract(UNISWAP_V3_FACTORY, FACTORY_ABI, this.provider)
 
     this.stats = {
@@ -141,6 +144,8 @@ export class RealUniswapListener {
     try {
       // Test connection first
       onLog("🔍 Testing Base chain connection...")
+
+      // Test basic connectivity
       const network = await this.provider.getNetwork()
       const blockNumber = await this.provider.getBlockNumber()
       this.currentBlock = blockNumber
@@ -333,7 +338,7 @@ export class RealUniswapListener {
     }
     if (this.blockCheckInterval) {
       clearInterval(this.blockCheckInterval)
-      this.blockCheckInterval = undefined
+      this.recentCountInterval = undefined
     }
 
     // Remove all listeners

@@ -26,14 +26,25 @@ import {
   Database,
   Eye,
   Lock,
+  Wallet,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-
-// Add these imports at the top
-import { RealUniswapListener, type RealPoolData } from "@/lib/real-sniper-bot"
+import { TradingSummaryComponent } from "@/components/trading-summary"
+import { PortfolioDashboard } from "@/components/portfolio-dashboard"
+import { WalletConnector } from "@/components/wallet-connector"
+import { WalletManager } from "@/lib/wallet-manager"
+import {
+  type AutomatedTrader,
+  createDefaultTradingConfig,
+  type TradingSummary,
+  type TradeExecution,
+} from "@/lib/automated-trader"
+import type { RealUniswapListener, RealPoolData } from "@/lib/real-sniper-bot"
+import { TradingEngine, type TradingEngineConfig } from "@/lib/trading-engine"
+import { PortfolioTracker, type PortfolioSummary } from "@/lib/portfolio-tracker"
+import { PriceMonitor, type TokenPrice, type PriceAlert } from "@/lib/price-monitor"
 import { BASE_RPC_URLS } from "@/lib/constants"
 
-// Replace the existing interfaces and add:
 interface RealBotConfig {
   rpcUrl: string
   enableRealMode: boolean
@@ -82,7 +93,21 @@ export default function UniswapSniperBot() {
   })
   const [logs, setLogs] = useState<string[]>([])
 
-  // Add state for real bot
+  const [automatedTrader, setAutomatedTrader] = useState<AutomatedTrader | null>(null)
+  const [tradingConfig, setTradingConfig] = useState(createDefaultTradingConfig())
+  const [tradingSummary, setTradingSummary] = useState<TradingSummary>({
+    totalTrades: 0,
+    successfulTrades: 0,
+    failedTrades: 0,
+    totalProfitLoss: 0,
+    totalGasCost: 0,
+    winRate: 0,
+    bestTrade: null,
+    worstTrade: null,
+    activePositions: 0,
+  })
+  const [recentTrades, setRecentTrades] = useState<TradeExecution[]>([])
+
   const [realBot, setRealBot] = useState<RealUniswapListener | null>(null)
   const [realPools, setRealPools] = useState<RealPoolData[]>([])
   const [realConfig, setRealConfig] = useState<RealBotConfig>({
@@ -90,7 +115,6 @@ export default function UniswapSniperBot() {
     enableRealMode: false,
   })
 
-  // Add real-time stats state
   const [realTimeStats, setRealTimeStats] = useState<RealTimeStats>({
     isRunning: false,
     totalPools: 0,
@@ -100,104 +124,162 @@ export default function UniswapSniperBot() {
     lastActivity: "None",
   })
 
+  const [tradingEngine, setTradingEngine] = useState<TradingEngine | null>(null)
+  const [portfolioTracker] = useState(new PortfolioTracker())
+  const [priceMonitor, setPriceMonitor] = useState<PriceMonitor | null>(null)
+  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary>({
+    totalInvested: 0,
+    currentValue: 0,
+    totalPnL: 0,
+    totalPnLPercentage: 0,
+    dayChange: 0,
+    dayChangePercentage: 0,
+    positions: [],
+    topGainer: null,
+    topLoser: null,
+  })
+  const [tokenPrices, setTokenPrices] = useState<TokenPrice[]>([])
+  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>([])
+  const [walletManager] = useState(new WalletManager())
+  const [walletConnection, setWalletConnection] = useState<any>(null)
+
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
     setLogs((prev) => [`[${timestamp}] ${message}`, ...prev.slice(0, 99)])
   }
 
-  // Replace the startBot function with:
   const startBot = async () => {
-    if (!config.privateKey && !realConfig.enableRealMode) {
-      addLog("❌ Private key required for demo mode")
+    if (!walletConnection && !realConfig.enableRealMode) {
+      addLog("❌ Wallet connection required. Please connect your wallet first.")
       return
     }
 
     setIsRunning(true)
 
-    if (realConfig.enableRealMode) {
-      // REAL MODE - Listen to actual blockchain
-      try {
-        addLog("🚀 Starting REAL Uniswap V3 Listener...")
-        addLog("⚠️ REAL MODE: Listening to live Base chain events")
-
-        const listener = new RealUniswapListener(realConfig.rpcUrl)
-        setRealBot(listener)
-
-        // Update stats every 5 seconds
-        const statsInterval = setInterval(() => {
-          if (listener.isListening()) {
-            const stats = listener.getRealTimeStats()
-            setRealTimeStats(stats)
-          }
-        }, 5000)
-        ;(window as any).statsInterval = statsInterval
-
-        await listener.start(
-          (pool: RealPoolData) => {
-            setRealPools((prev) => [pool, ...prev.slice(0, 49)]) // Keep last 50
-            const token0Symbol = pool.token0Info?.symbol || pool.token0.slice(0, 6)
-            const token1Symbol = pool.token1Info?.symbol || pool.token1.slice(0, 6)
-            addLog(`🎯 REAL POOL: ${token0Symbol}/${token1Symbol} | Fee: ${pool.fee / 10000}%`)
-          },
-          (message: string) => {
-            addLog(message)
-          },
-        )
-      } catch (error) {
-        addLog(`❌ Failed to start real listener: ${error}`)
-        setIsRunning(false)
+    try {
+      // Create trading engine configuration
+      const engineConfig: TradingEngineConfig = {
+        ...tradingConfig,
+        rpcUrl: realConfig.enableRealMode ? realConfig.rpcUrl : config.rpcUrl,
+        privateKey: walletConnection?.type === "private-key" ? config.privateKey : "",
+        enableRealMode: realConfig.enableRealMode,
       }
-    } else {
-      // DEMO MODE - Simulate for testing
-      addLog("🚀 Starting Demo Mode (Simulated Data)")
-      addLog("👂 Listening for simulated pairs...")
 
-      const interval = setInterval(() => {
-        if (Math.random() > 0.7) {
-          const mockPool: PoolData = {
-            token0: `0x${Math.random().toString(16).substr(2, 40)}`,
-            token1: `0x${Math.random().toString(16).substr(2, 40)}`,
-            pool: `0x${Math.random().toString(16).substr(2, 40)}`,
-            fee: Math.random() > 0.5 ? 3000 : 500,
-            timestamp: new Date().toISOString(),
-            blockNumber: Math.floor(Math.random() * 1000000) + 18000000,
-            txHash: `0x${Math.random().toString(16).substr(2, 64)}`,
+      // Initialize trading engine
+      const engine = new TradingEngine(engineConfig, {
+        onLog: addLog,
+        onPoolDetected: (pool) => {
+          if (realConfig.enableRealMode) {
+            setRealPools((prev) => [pool, ...prev.slice(0, 49)])
           }
-          setPools((prev) => [mockPool, ...prev.slice(0, 19)])
-          addLog(`🔍 Demo pool: ${mockPool.pool.slice(0, 8)}...`)
+          const token0Symbol = pool.token0Info?.symbol || pool.token0.slice(0, 6)
+          const token1Symbol = pool.token1Info?.symbol || pool.token1.slice(0, 6)
+          addLog(`🎯 Pool: ${token0Symbol}/${token1Symbol} | Fee: ${pool.fee / 10000}%`)
+        },
+        onTradeExecuted: (trade) => {
+          setRecentTrades((prev) => [trade, ...prev.slice(0, 19)])
+
+          // Update portfolio
+          portfolioTracker.addTrade(
+            trade.tokenAddress,
+            trade.tokenSymbol,
+            Number.parseFloat(trade.amountOut),
+            Number.parseFloat(trade.amountIn) / Number.parseFloat(trade.amountOut),
+            trade.type,
+          )
+
+          // Update summary
+          setPortfolioSummary(portfolioTracker.getPortfolioSummary())
+
+          addLog(`✅ Trade executed: ${trade.type} ${trade.tokenSymbol}`)
+        },
+      })
+
+      setTradingEngine(engine)
+      await engine.start()
+
+      // Initialize price monitor
+      const monitor = new PriceMonitor(new (await import("ethers")).ethers.JsonRpcProvider(engineConfig.rpcUrl), {
+        onPriceUpdate: (price) => {
+          setTokenPrices((prev) => {
+            const updated = prev.filter((p) => p.address !== price.address)
+            return [price, ...updated]
+          })
+
+          // Update portfolio with new price
+          portfolioTracker.updatePrice(price.address, price.priceUSD)
+          setPortfolioSummary(portfolioTracker.getPortfolioSummary())
+        },
+        onAlert: (alert) => {
+          setPriceAlerts((prev) => [alert, ...prev])
+          addLog(`🚨 Price Alert: ${alert.type} triggered for ${alert.tokenAddress}`)
+        },
+      })
+
+      setPriceMonitor(monitor)
+
+      // Update trading summary periodically
+      const summaryInterval = setInterval(() => {
+        if (engine.isEngineRunning()) {
+          const summary = engine.getTradingSummary()
+          setTradingSummary(summary)
+          setRecentTrades(engine.getAllTrades().slice(0, 20))
         }
-      }, 3000)
-      ;(window as any).botInterval = interval
+      }, 5000)
+      ;(window as any).summaryInterval = summaryInterval
+    } catch (error) {
+      addLog(`❌ Failed to start trading engine: ${error}`)
+      setIsRunning(false)
     }
   }
 
-  // Update stopBot to clear stats interval:
   const stopBot = async () => {
     setIsRunning(false)
 
-    if ((window as any).statsInterval) {
-      clearInterval((window as any).statsInterval)
+    if ((window as any).summaryInterval) {
+      clearInterval((window as any).summaryInterval)
     }
 
-    if (realBot) {
-      await realBot.stop()
-      setRealBot(null)
-      addLog("⏹️ Real listener stopped")
+    if (tradingEngine) {
+      await tradingEngine.stop()
+      setTradingEngine(null)
     }
 
-    if ((window as any).botInterval) {
-      clearInterval((window as any).botInterval)
-      addLog("⏹️ Demo mode stopped")
+    if (priceMonitor) {
+      priceMonitor.stopMonitoring()
+      setPriceMonitor(null)
     }
 
-    setRealTimeStats({
-      isRunning: false,
-      totalPools: 0,
-      recentPools: 0,
-      connectionStatus: "disconnected",
-      runtime: "0h 0m",
-      lastActivity: "None",
-    })
+    addLog("⏹️ All systems stopped")
+  }
+
+  const handleWalletConnect = async (connection: {
+    type: "metamask" | "private-key"
+    address: string
+    signer?: any
+  }) => {
+    try {
+      let walletConn
+
+      if (connection.type === "metamask") {
+        // MetaMask connection is already handled by the enhanced MetaMask class
+        walletConn = {
+          type: "metamask",
+          address: connection.address,
+          signer: connection.signer,
+        }
+        addLog(`✅ MetaMask connected: ${connection.address}`)
+      } else if (connection.type === "private-key") {
+        // Connect with private key
+        walletConn = await walletManager.connectPrivateKey(config.privateKey, config.rpcUrl)
+        addLog(`✅ Private key wallet connected: ${walletConn.address}`)
+      }
+
+      setWalletConnection(walletConn)
+    } catch (error: any) {
+      addLog(`❌ Wallet connection failed: ${error.message}`)
+      throw error
+    }
   }
 
   useEffect(() => {
@@ -208,10 +290,12 @@ export default function UniswapSniperBot() {
       if ((window as any).statsInterval) {
         clearInterval((window as any).statsInterval)
       }
+      if ((window as any).summaryInterval) {
+        clearInterval((window as any).summaryInterval)
+      }
     }
   }, [])
 
-  // Helper function to safely format numbers
   const safeToLocaleString = (value: number | undefined | null): string => {
     if (value === undefined || value === null || isNaN(value)) {
       return "0"
@@ -221,7 +305,6 @@ export default function UniswapSniperBot() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
-      {/* Professional Header with Gradient Overlay */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20" />
         <div className="relative max-w-7xl mx-auto px-4 py-12">
@@ -257,7 +340,6 @@ export default function UniswapSniperBot() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 pb-12 -mt-6">
-        {/* Professional Status Dashboard */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
             <CardContent className="p-6">
@@ -341,9 +423,8 @@ export default function UniswapSniperBot() {
           </Card>
         </div>
 
-        {/* Professional Tabs */}
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 bg-slate-800 border-slate-700 p-1">
+          <TabsList className="grid w-full grid-cols-6 bg-slate-800 border-slate-700 p-1">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
               <BarChart3 className="h-4 w-4 mr-2" />
               Dashboard
@@ -360,11 +441,24 @@ export default function UniswapSniperBot() {
               <Eye className="h-4 w-4 mr-2" />
               System Logs
             </TabsTrigger>
+            <TabsTrigger value="automation" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+              <Zap className="h-4 w-4 mr-2" />
+              Automation
+            </TabsTrigger>
+            <TabsTrigger value="portfolio" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+              <Wallet className="h-4 w-4 mr-2" />
+              Portfolio
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
+            <WalletConnector
+              onConnect={handleWalletConnect}
+              isConnected={!!walletConnection}
+              walletAddress={walletConnection?.address}
+              walletType={walletConnection?.type}
+            />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Professional Control Panel */}
               <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-white flex items-center gap-2">
@@ -404,7 +498,6 @@ export default function UniswapSniperBot() {
                     </AlertDescription>
                   </Alert>
 
-                  {/* Professional Stats Grid */}
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-700">
                     <div className="text-center p-3 bg-slate-800/50 rounded-lg">
                       <p className="text-2xl font-bold text-emerald-400">
@@ -424,7 +517,6 @@ export default function UniswapSniperBot() {
                 </CardContent>
               </Card>
 
-              {/* Professional Activity Monitor */}
               <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-white flex items-center gap-2">
@@ -447,9 +539,29 @@ export default function UniswapSniperBot() {
                     ))}
                     {logs.length === 0 && (
                       <div className="text-center py-12">
-                        <Activity className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-                        <p className="text-slate-500">Awaiting system initialization...</p>
-                        <p className="text-xs text-slate-600 mt-2">Activity logs will appear here</p>
+                        <div className="mb-6">
+                          <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            {realConfig.enableRealMode ? (
+                              <Signal className="h-8 w-8 text-white" />
+                            ) : (
+                              <Database className="h-8 w-8 text-white" />
+                            )}
+                          </div>
+                        </div>
+                        <h3 className="text-xl font-semibold text-white mb-2">
+                          {realConfig.enableRealMode ? "Monitoring Live Base Chain" : "System Ready"}
+                        </h3>
+                        <p className="text-slate-400 mb-4">
+                          {realConfig.enableRealMode
+                            ? "Scanning for new Uniswap V3 pool deployments..."
+                            : "Initialize the system to begin pool detection"}
+                        </p>
+                        {realConfig.enableRealMode && (
+                          <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                            <span>Last activity: {realTimeStats.lastActivity}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -485,15 +597,16 @@ export default function UniswapSniperBot() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="gas" className="text-slate-300 font-medium">
-                      Max Gas Price (Gwei)
+                      Max Gas Price (USD)
                     </Label>
                     <Input
                       id="gas"
                       value={config.maxGasPrice}
                       onChange={(e) => setConfig((prev) => ({ ...prev, maxGasPrice: e.target.value }))}
-                      placeholder="50"
+                      placeholder="5.00"
                       className="bg-slate-900 border-slate-600 text-white"
                     />
+                    <p className="text-xs text-slate-400">Maximum USD to spend on gas per transaction</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="liquidity" className="text-slate-300 font-medium">
@@ -518,6 +631,7 @@ export default function UniswapSniperBot() {
                       placeholder="5"
                       className="bg-slate-900 border-slate-600 text-white"
                     />
+                    <p className="text-xs text-slate-400">Maximum price difference accepted during trade execution</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="amount" className="text-slate-300 font-medium">
@@ -531,7 +645,7 @@ export default function UniswapSniperBot() {
                       className="bg-slate-900 border-slate-600 text-white"
                     />
                   </div>
-                  <div className="flex items-center space-x-3 p-4 bg-slate-900/50 rounded-lg">
+                  <div className="flex items-center space-x-3 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
                     <Switch
                       id="enabled"
                       checked={config.enabled}
@@ -581,9 +695,7 @@ export default function UniswapSniperBot() {
                       </Alert>
 
                       <div className="space-y-2">
-                        <Label htmlFor="rpc-url" className="text-slate-300 font-medium">
-                          Base Chain RPC URL
-                        </Label>
+                        <Label className="text-slate-300">Base Chain RPC URL</Label>
                         <Input
                           id="rpc-url"
                           value={realConfig.rpcUrl}
@@ -776,10 +888,108 @@ export default function UniswapSniperBot() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="automation" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-yellow-400" />
+                    Automated Trading Settings
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">Configure intelligent trading automation</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center space-x-3 p-4 bg-gradient-to-r from-yellow-900/30 to-orange-900/30 rounded-lg border border-yellow-700">
+                    <Switch
+                      id="auto-trading"
+                      checked={tradingConfig.enabled}
+                      onCheckedChange={(checked) => setTradingConfig((prev) => ({ ...prev, enabled: checked }))}
+                    />
+                    <Label htmlFor="auto-trading" className="font-semibold text-yellow-300 flex items-center gap-2">
+                      <Zap className="h-4 w-4" />🤖 Enable Automated Trading
+                    </Label>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-slate-300">Max Position Size (ETH)</Label>
+                      <Input
+                        value={tradingConfig.maxPositionSizeETH}
+                        onChange={(e) =>
+                          setTradingConfig((prev) => ({
+                            ...prev,
+                            maxPositionSizeETH: Number.parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        placeholder="0.01"
+                        className="bg-slate-900 border-slate-600 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-slate-300">Max Gas Price (USD)</Label>
+                      <Input
+                        value={tradingConfig.maxGasPriceUSD}
+                        onChange={(e) =>
+                          setTradingConfig((prev) => ({
+                            ...prev,
+                            maxGasPriceUSD: Number.parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        placeholder="5.00"
+                        className="bg-slate-900 border-slate-600 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-slate-300">Min Confidence (%)</Label>
+                      <Input
+                        value={tradingConfig.minConfidenceScore}
+                        onChange={(e) =>
+                          setTradingConfig((prev) => ({
+                            ...prev,
+                            minConfidenceScore: Number.parseInt(e.target.value) || 0,
+                          }))
+                        }
+                        placeholder="70"
+                        className="bg-slate-900 border-slate-600 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-slate-300">Max Risk Score</Label>
+                      <Input
+                        value={tradingConfig.maxRiskScore}
+                        onChange={(e) =>
+                          setTradingConfig((prev) => ({
+                            ...prev,
+                            maxRiskScore: Number.parseInt(e.target.value) || 0,
+                          }))
+                        }
+                        placeholder="40"
+                        className="bg-slate-900 border-slate-600 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <Alert className="bg-gradient-to-r from-red-900/50 to-orange-900/50 border-red-700">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-red-200">
+                      <strong>HIGH RISK:</strong> Automated trading can result in significant losses. Only use funds you
+                      can afford to lose.
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
+
+              <TradingSummaryComponent summary={tradingSummary} recentTrades={recentTrades} />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="portfolio" className="space-y-6">
+            <PortfolioDashboard summary={portfolioSummary} />
+          </TabsContent>
         </Tabs>
       </div>
 
-      {/* Custom Scrollbar Styles */}
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;

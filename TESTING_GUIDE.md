@@ -1,133 +1,141 @@
 # 🧪 Uniswap Sniper Bot Testing Guide
 
-## 🚀 Quick Start Testing
+## 🚀 Quick Start
 
 ### 1. Generate Test Wallet
 \`\`\`bash
 npm run generate-wallet
 \`\`\`
-This creates a new wallet with:
-- ✅ Private key for testing
-- ✅ Public address
+This creates a new test wallet with:
+- ✅ Ethereum address
+- ✅ Private key
 - ✅ Mnemonic phrase
-- ✅ Saved to JSON file
 
-### 2. Test Base Chain Connection
+### 2. Check Wallet Balance
+\`\`\`bash
+npm run check-balance YOUR_ADDRESS_HERE
+\`\`\`
+Example:
+\`\`\`bash
+npm run check-balance 0x742d35Cc6634C0532925a3b8D4C9db96590c6C87
+\`\`\`
+
+### 3. Test Base Chain Connection
 \`\`\`bash
 npm run test-connection
 \`\`\`
 This verifies:
-- ✅ RPC connection to Base
-- ✅ Current block number
-- ✅ Uniswap V3 factory access
-- ✅ Event filtering capability
-- ✅ Recent pool detection
+- ✅ Base chain connectivity
+- ✅ Uniswap V3 factory contract
+- ✅ Recent pool events
+- ✅ Block synchronization
 
-### 3. Check Wallet Balance
-\`\`\`bash
-npm run check-balance YOUR_WALLET_ADDRESS
-\`\`\`
-This shows:
-- ✅ ETH balance on Base
-- ✅ Transaction count
-- ✅ USD value estimate
-- ✅ BaseScan link
+## 🔧 Configuration
 
-## 🔧 Debugging No Pools Found
+### RPC Endpoints (Priority Order)
+1. **Alchemy** (Recommended for production)
+   - `https://base-mainnet.g.alchemy.com/v2/YOUR_API_KEY`
+   - Best performance and reliability
 
-### Issue: Bot runs 23+ hours with no pools detected
+2. **Infura** (Good alternative)
+   - `https://base-mainnet.infura.io/v3/YOUR_PROJECT_ID`
+   - Reliable with good uptime
 
-**Possible Causes:**
-1. **Wrong Factory Address** - Verify Uniswap V3 factory
-2. **RPC Connection Issues** - Test with different providers
-3. **Event Listener Problems** - Check WebSocket vs HTTP
-4. **Low Pool Creation Rate** - Base has fewer new pools than Ethereum
+3. **Base Official** (Free but limited)
+   - `https://mainnet.base.org`
+   - Rate limited but works for testing
 
-### 🔍 Diagnostic Steps:
+### 🎯 Live Mode Setup
 
-#### Step 1: Verify Factory Address
-\`\`\`bash
-npm run test-connection
-\`\`\`
-Should show:
-- ✅ Factory contract verified
-- ✅ Recent events found (even if 0)
+1. **Enable Live Mode** in Configuration tab
+2. **Set RPC URL** (use Alchemy/Infura for best results)
+3. **Initialize System** - should show "Connected" status
+4. **Monitor Logs** for real-time events
 
-#### Step 2: Check Historical Pools
-The bot now scans last 1000 blocks for existing pools to verify the system works.
+## 📊 Expected Results
 
-#### Step 3: Monitor Connection
-- Check "System Status" shows "Connected"
-- Verify "Current Block" is updating
-- Watch "Events Listened" counter
+### Demo Mode
+- ✅ Simulated pools every 3-5 seconds
+- ✅ Mock data for testing UI
+- ✅ No real blockchain connection
 
-#### Step 4: Try Different RPC
-Update in Configuration:
-- **Free**: `https://mainnet.base.org`
-- **Alchemy**: `https://base-mainnet.g.alchemy.com/v2/YOUR_KEY`
-- **QuickNode**: `https://base-mainnet.quiknode.pro/YOUR_ENDPOINT`
+### Live Mode
+- ✅ Real Base chain connection
+- ✅ Historical pools on startup (1-5 recent)
+- ✅ Live pool detection (rare - 1-10 per day)
+- ✅ Block updates every ~2 seconds
 
-## 📊 Expected Behavior
+## 🐛 Troubleshooting
 
-### Normal Operation:
-- ✅ Connects to Base chain
-- ✅ Shows current block updates
-- ✅ Finds historical pools in recent blocks
-- ✅ Waits for new pool creation events
+### "No pools found after 23 hours"
+**Solution**: Base chain has very few new pools daily. The bot now:
+- ✅ Shows historical pools on startup
+- ✅ Monitors blocks for activity
+- ✅ Displays connection status
 
-### Pool Creation Frequency:
-- **Ethereum**: 10-50 pools/day
-- **Base**: 1-10 pools/day (much lower)
-- **Peak times**: More activity during US hours
+### "Connection Error"
+**Solutions**:
+1. Check RPC URL is correct
+2. Try different RPC provider
+3. Verify internet connection
+4. Run `npm run test-connection`
 
-## 🚨 Troubleshooting
+### "MetaMask Error"
+**Solution**: This bot doesn't use MetaMask - pure RPC connection only.
 
-### Connection Issues:
-\`\`\`
-❌ Provider Error: network does not support ENS
-\`\`\`
-**Fix**: Use different RPC endpoint
+## 🔐 Security Best Practices
 
-### No Historical Pools:
-\`\`\`
-📊 Found 0 pool creation events in recent blocks
-\`\`\`
-**Normal**: Base has low pool creation rate
+### Test Wallet Safety
+- ✅ Only use generated wallets for testing
+- ✅ Never use real funds with test wallets
+- ✅ Store private keys securely
+- ✅ Don't share private keys publicly
 
-### Event Listener Silent:
-\`\`\`
-Events Listened: 0 (after hours)
-\`\`\`
-**Check**: 
-1. RPC endpoint working
-2. WebSocket support
-3. Factory address correct
+### Production Setup
+- ✅ Use dedicated RPC endpoints (Alchemy/Infura)
+- ✅ Implement proper key management
+- ✅ Monitor gas prices and limits
+- ✅ Set up proper error handling
 
-## 🎯 Success Indicators
+## 📈 Performance Optimization
 
-### ✅ Working System:
-- Connection Status: "Connected"
-- Current Block: Updates every ~2 seconds
-- Historical pools found in recent scan
-- Events Listened: Increments when pools detected
+### RPC Provider Selection
+1. **Alchemy**: Best for high-frequency trading
+2. **Infura**: Good balance of performance/cost
+3. **QuickNode**: Alternative premium option
+4. **Base Official**: Free but rate-limited
 
-### ✅ Pool Detection:
-- Real-time notification in logs
-- Pool data populated with token info
-- Transaction hash and block number
-- Token symbols resolved
+### Monitoring Tips
+- ✅ Watch "Events Listened" counter
+- ✅ Monitor block updates
+- ✅ Check connection status regularly
+- ✅ Review system logs for errors
 
-## 🔗 Useful Resources
+## 🎯 Success Metrics
 
-- **BaseScan**: https://basescan.org/
-- **Base Bridge**: https://bridge.base.org/
-- **Uniswap V3 Base**: https://app.uniswap.org/#/swap?chain=base
-- **Base Docs**: https://docs.base.org/
+### System Health
+- ✅ Connection Status: "Connected"
+- ✅ Block Updates: Every ~2 seconds
+- ✅ Historical Pools: 1-5 on startup
+- ✅ Runtime: Continuous uptime
+
+### Pool Detection
+- ✅ Historical: Immediate on startup
+- ✅ Live: 1-10 pools per day on Base
+- ✅ Token Info: Symbol/name resolution
+- ✅ Event Processing: <1 second delay
+
+## 🚨 Important Notes
+
+1. **Base Chain Activity**: Much lower than Ethereum mainnet
+2. **Pool Frequency**: 1-10 new pools per day (vs 50+ on Ethereum)
+3. **Historical Data**: Bot shows recent pools to verify functionality
+4. **No Trading**: This is monitoring-only (no actual trades executed)
 
 ## 📞 Support
 
-If issues persist:
-1. Check all diagnostic steps above
-2. Try different RPC providers
-3. Verify Base chain is operational
-4. Consider pool creation is naturally infrequent on Base
+If you encounter issues:
+1. Run `npm run test-connection` first
+2. Check the system logs tab
+3. Verify RPC endpoint is working
+4. Try different RPC provider

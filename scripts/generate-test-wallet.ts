@@ -1,14 +1,12 @@
 import { ethers } from "ethers"
-import * as fs from "fs"
 
-interface WalletInfo {
+interface TestWallet {
   address: string
   privateKey: string
   mnemonic: string
-  publicKey: string
 }
 
-function generateTestWallet(): WalletInfo {
+function generateTestWallet(): TestWallet {
   // Generate a random wallet
   const wallet = ethers.Wallet.createRandom()
 
@@ -16,42 +14,35 @@ function generateTestWallet(): WalletInfo {
     address: wallet.address,
     privateKey: wallet.privateKey,
     mnemonic: wallet.mnemonic?.phrase || "",
-    publicKey: wallet.publicKey,
   }
 }
 
-function saveWalletToFile(wallet: WalletInfo) {
-  const walletData = {
-    ...wallet,
-    network: "Base Mainnet",
-    chainId: 8453,
-    createdAt: new Date().toISOString(),
-    warning: "⚠️ NEVER share your private key! This is for testing only.",
-  }
+function main() {
+  console.log("🔐 Generating Test Wallet for Base Chain...")
 
-  const filename = `test-wallet-${Date.now()}.json`
-  fs.writeFileSync(filename, JSON.stringify(walletData, null, 2))
-  return filename
+  const wallet = generateTestWallet()
+
+  console.log("\n✅ Test Wallet Generated:")
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  console.log(`📍 Address: ${wallet.address}`)
+  console.log(`🔑 Private Key: ${wallet.privateKey}`)
+  console.log(`🎯 Mnemonic: ${wallet.mnemonic}`)
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  console.log("\n⚠️  SECURITY WARNING:")
+  console.log("• This is a TEST wallet - DO NOT use for real funds")
+  console.log("• Store private key securely")
+  console.log("• Never share private key publicly")
+  console.log("\n🧪 Testing Commands:")
+  console.log(`npm run check-balance ${wallet.address}`)
+  console.log("npm run test-connection")
+  console.log("\n💡 Future MetaMask Integration:")
+  console.log("• This wallet can be imported into MetaMask")
+  console.log("• Use the private key or mnemonic phrase")
+  console.log("• Add Base network to MetaMask first")
 }
 
-// Generate and save wallet
-console.log("🔐 Generating Test Wallet for Base Chain...")
-const wallet = generateTestWallet()
-const filename = saveWalletToFile(wallet)
+if (require.main === module) {
+  main()
+}
 
-console.log("\n✅ Test Wallet Generated Successfully!")
-console.log("=" * 50)
-console.log(`📁 Saved to: ${filename}`)
-console.log(`📍 Address: ${wallet.address}`)
-console.log(`🔑 Private Key: ${wallet.privateKey}`)
-console.log(`🌱 Mnemonic: ${wallet.mnemonic}`)
-console.log("=" * 50)
-console.log("\n⚠️  SECURITY WARNING:")
-console.log("• This wallet is for TESTING ONLY")
-console.log("• Never use this on mainnet with real funds")
-console.log("• Keep your private key secure")
-console.log("• Fund with small amounts only")
-console.log("\n💰 To fund this wallet:")
-console.log("• Use Base testnet faucet")
-console.log("• Or send small amount of ETH on Base mainnet")
-console.log(`• Check balance: npm run check-balance ${wallet.address}`)
+export { generateTestWallet }
