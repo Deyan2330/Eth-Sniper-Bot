@@ -11,70 +11,45 @@ export function formatAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
 
-export function formatTimeAgo(timestamp: string): string {
-  try {
-    const now = new Date()
-    const time = new Date(timestamp)
-    const diffInSeconds = Math.floor((now.getTime() - time.getTime()) / 1000)
+export function formatTimeAgo(timestamp: number | string): string {
+  const now = Date.now()
+  const time = typeof timestamp === "string" ? Number.parseInt(timestamp) : timestamp
+  const diff = now - time
 
-    if (diffInSeconds < 60) {
-      return `${diffInSeconds}s ago`
-    } else if (diffInSeconds < 3600) {
-      const minutes = Math.floor(diffInSeconds / 60)
-      return `${minutes}m ago`
-    } else if (diffInSeconds < 86400) {
-      const hours = Math.floor(diffInSeconds / 3600)
-      return `${hours}h ago`
-    } else {
-      const days = Math.floor(diffInSeconds / 86400)
-      return `${days}d ago`
-    }
-  } catch (error) {
-    return "Unknown"
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+
+  if (days > 0) return `${days}d ago`
+  if (hours > 0) return `${hours}h ago`
+  if (minutes > 0) return `${minutes}m ago`
+  return `${seconds}s ago`
+}
+
+export function safeValue(value: any, defaultValue = 0): number {
+  if (value === null || value === undefined) return defaultValue
+  if (typeof value === "number" && !isNaN(value)) return value
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value)
+    return isNaN(parsed) ? defaultValue : parsed
   }
+  return defaultValue
 }
 
 export function formatNumber(num: number, decimals = 2): string {
-  return new Intl.NumberFormat("en-US", {
+  return num.toLocaleString("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(num)
+  })
 }
 
-export function formatCurrency(amount: number, currency = "USD"): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-  }).format(amount)
+export function formatEther(wei: string | number, decimals = 4): string {
+  const value = typeof wei === "string" ? Number.parseFloat(wei) : wei
+  return (value / 1e18).toFixed(decimals)
 }
 
-export function formatPercentage(value: number, decimals = 1): string {
-  return `${value.toFixed(decimals)}%`
-}
-
-export function safeValue(value: any, fallback: any = 0): any {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return fallback
-  }
-  return value
-}
-
-export function createLogger(name: string) {
-  return {
-    info: (message: string, ...args: any[]) => console.log(`[${name}] ${message}`, ...args),
-    warn: (message: string, ...args: any[]) => console.warn(`[${name}] ${message}`, ...args),
-    error: (message: string, ...args: any[]) => console.error(`[${name}] ${message}`, ...args),
-  }
-}
-
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-export function isValidAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address)
-}
-
-export function isValidPrivateKey(privateKey: string): boolean {
-  return /^0x[a-fA-F0-9]{64}$/.test(privateKey)
+export function formatGwei(wei: string | number): string {
+  const value = typeof wei === "string" ? Number.parseFloat(wei) : wei
+  return (value / 1e9).toFixed(2)
 }

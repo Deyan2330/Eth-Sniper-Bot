@@ -10,19 +10,19 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
+    --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 84% 4.9%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96%;
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96%;
-    --accent-foreground: 222.2 84% 4.9%;
+    --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
@@ -38,8 +38,8 @@
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 84% 4.9%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
@@ -50,7 +50,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 94.1%;
+    --ring: 212.7 26.8% 83.9%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -68,7 +68,35 @@
   }
 }
 
-/* Custom animations */
+/* Custom styles for the sniper bot */
+.bg-gradient-blue {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0f172a 100%);
+}
+
+.status-card {
+  @apply bg-slate-800/50 border-slate-700 backdrop-blur-sm;
+}
+
+.pool-card {
+  @apply bg-slate-800/50 border-slate-700 backdrop-blur-sm;
+}
+
+.live-badge {
+  @apply bg-green-500 text-white animate-pulse;
+}
+
+.fee-tier-badge {
+  @apply bg-purple-500 text-white;
+}
+
+.tab-trigger {
+  @apply data-[state=active]:bg-blue-600 data-[state=active]:text-white;
+}
+
+.animate-pulse-blue {
+  animation: pulse-blue 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 @keyframes pulse-blue {
   0%,
   100% {
@@ -77,104 +105,4 @@
   50% {
     opacity: 0.5;
   }
-}
-
-.animate-pulse-blue {
-  animation: pulse-blue 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Custom gradient backgrounds */
-.bg-gradient-blue {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-}
-
-/* Status cards */
-.status-card {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(71, 85, 105, 0.3);
-  backdrop-filter: blur(10px);
-}
-
-/* Pool cards */
-.pool-card {
-  background: rgba(30, 41, 59, 0.6);
-  border: 1px solid rgba(71, 85, 105, 0.4);
-  backdrop-filter: blur(10px);
-}
-
-/* Live badge */
-.live-badge {
-  background: linear-gradient(45deg, #10b981, #059669);
-  color: white;
-  animation: pulse-blue 2s infinite;
-}
-
-/* Fee tier badge */
-.fee-tier-badge {
-  background: linear-gradient(45deg, #8b5cf6, #7c3aed);
-  color: white;
-}
-
-/* Tab triggers */
-.tab-trigger {
-  transition: all 0.2s ease-in-out;
-}
-
-.tab-trigger[data-state="active"] {
-  background: linear-gradient(45deg, #3b82f6, #2563eb);
-  color: white;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(30, 41, 59, 0.3);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(71, 85, 105, 0.6);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 0.8);
-}
-
-/* Glow effects */
-.glow-blue {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
-}
-
-.glow-green {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
-}
-
-/* Button hover effects */
-.btn-glow:hover {
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
-  transform: translateY(-1px);
-  transition: all 0.2s ease-in-out;
-}
-
-/* Custom scrollbar */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(30, 41, 59, 0.3);
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(71, 85, 105, 0.6);
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 0.8);
 }

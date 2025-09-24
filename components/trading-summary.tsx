@@ -1,10 +1,10 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { RefreshCw, TrendingUp, TrendingDown, Activity, DollarSign, Target } from "lucide-react"
+import { RefreshCw, TrendingUp, TrendingDown, Activity, DollarSign, Zap, Target } from "lucide-react"
 
 export interface TradingSummaryData {
   totalTrades: number
@@ -38,8 +38,8 @@ export function TradingSummary({ data, isLoading = false, onRefresh }: TradingSu
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">Trading Dashboard</h2>
-          <p className="text-gray-400">Performance metrics and analytics</p>
+          <h2 className="text-2xl font-bold text-white">Trading Performance</h2>
+          <p className="text-gray-400">Real-time trading statistics and analytics</p>
         </div>
         {onRefresh && (
           <Button
@@ -64,8 +64,8 @@ export function TradingSummary({ data, isLoading = false, onRefresh }: TradingSu
           <CardContent>
             <div className="text-2xl font-bold text-white">{data.totalTrades}</div>
             <div className="flex items-center gap-2 mt-1">
-              <Badge className="bg-green-500 text-white text-xs">{data.successfulTrades} Success</Badge>
-              <Badge className="bg-red-500 text-white text-xs">{data.failedTrades} Failed</Badge>
+              <Badge className="bg-green-500/20 text-green-400 text-xs">{data.successfulTrades} successful</Badge>
+              <Badge className="bg-red-500/20 text-red-400 text-xs">{data.failedTrades} failed</Badge>
             </div>
           </CardContent>
         </Card>
@@ -113,13 +113,12 @@ export function TradingSummary({ data, isLoading = false, onRefresh }: TradingSu
         </Card>
       </div>
 
-      {/* Detailed Metrics */}
+      {/* Detailed Stats */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Performance Metrics */}
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader>
             <CardTitle className="text-white">Performance Metrics</CardTitle>
-            <CardDescription className="text-gray-400">Detailed trading performance</CardDescription>
+            <CardDescription className="text-gray-400">Key trading performance indicators</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
@@ -135,76 +134,36 @@ export function TradingSummary({ data, isLoading = false, onRefresh }: TradingSu
               <span className="text-red-400 font-bold">-{data.largestLoss.toFixed(4)} ETH</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-300">Avg Gas Used</span>
-              <span className="text-white font-bold">{data.averageGasUsed.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-300">Avg Execution Time</span>
+              <span className="text-gray-300">Avg. Execution Time</span>
               <span className="text-white font-bold">{data.averageExecutionTime.toFixed(2)}s</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Current Status */}
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader>
             <CardTitle className="text-white">Current Status</CardTitle>
-            <CardDescription className="text-gray-400">Active positions and orders</CardDescription>
+            <CardDescription className="text-gray-400">Active positions and pending orders</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-gray-300">Active Positions</span>
-              <Badge className="bg-blue-500 text-white">{data.activePositions}</Badge>
+              <Badge className="bg-blue-500/20 text-blue-400">{data.activePositions}</Badge>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-300">Pending Orders</span>
-              <Badge className="bg-yellow-500 text-white">{data.pendingOrders}</Badge>
+              <Badge className="bg-yellow-500/20 text-yellow-400">{data.pendingOrders}</Badge>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-300">Win Rate</span>
-              <div className="flex items-center gap-2">
-                <Progress value={data.successRate} className="w-20 h-2" />
-                <span className="text-white font-bold text-sm">{data.successRate.toFixed(0)}%</span>
+              <span className="text-gray-300">Avg. Gas Used</span>
+              <div className="flex items-center gap-1">
+                <Zap className="h-3 w-3 text-orange-400" />
+                <span className="text-white font-bold">{data.averageGasUsed.toLocaleString()}</span>
               </div>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-300">Status</span>
-              <Badge className="bg-green-500 text-white">
-                <div className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse"></div>
-                Active
-              </Badge>
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Quick Stats */}
-      <Card className="bg-slate-800/50 border-slate-700">
-        <CardHeader>
-          <CardTitle className="text-white">Quick Statistics</CardTitle>
-          <CardDescription className="text-gray-400">At-a-glance performance overview</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-400">{data.successfulTrades}</div>
-              <div className="text-sm text-gray-400">Successful</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-red-400">{data.failedTrades}</div>
-              <div className="text-sm text-gray-400">Failed</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-400">{data.activePositions}</div>
-              <div className="text-sm text-gray-400">Active</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-400">{data.pendingOrders}</div>
-              <div className="text-sm text-gray-400">Pending</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

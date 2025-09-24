@@ -1,12 +1,11 @@
 import type { Config } from "tailwindcss"
 
-const config = {
+const config: Config = {
   darkMode: ["class"],
   content: [
-    "./pages/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./app/**/*.{ts,tsx}",
-    "./src/**/*.{ts,tsx}",
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "*.{js,ts,jsx,tsx,mdx}",
   ],
   prefix: "",
@@ -53,20 +52,13 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Custom colors for the bot
+        // Custom colors for the sniper bot
         "blue-dark": "#0f172a",
         "blue-card": "#1e293b",
-        "blue-accent": "#334155",
+        "blue-accent": "#3b82f6",
         "blue-bright": "#60a5fa",
         "green-live": "#10b981",
         "purple-fee": "#8b5cf6",
-        chart: {
-          "1": "hsl(var(--chart-1))",
-          "2": "hsl(var(--chart-2))",
-          "3": "hsl(var(--chart-3))",
-          "4": "hsl(var(--chart-4))",
-          "5": "hsl(var(--chart-5))",
-        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -83,8 +75,12 @@ const config = {
           to: { height: "0" },
         },
         "pulse-blue": {
-          "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.5" },
+          "0%, 100%": {
+            opacity: "1",
+          },
+          "50%": {
+            opacity: ".5",
+          },
         },
       },
       animation: {

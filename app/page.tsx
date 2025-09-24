@@ -148,14 +148,17 @@ export default function SniperBotDashboard() {
   }
 
   const calculateGasPriceUSD = (gasPriceGwei: string): number => {
-    const gasPriceWei = Number.parseFloat(gasPriceGwei) * 1e9
+    const gasPriceNumber = Number.parseFloat(gasPriceGwei) || 0
+    const gasPriceWei = gasPriceNumber * 1e9
     const gasCostEth = (gasPriceWei * 21000) / 1e18
     return gasCostEth * ethPrice
   }
 
   const calculateMaxGasLimitUSD = (gasLimit: string, gasPriceGwei: string): number => {
-    const gasPriceWei = Number.parseFloat(gasPriceGwei) * 1e9
-    const gasCostEth = (gasPriceWei * Number.parseFloat(gasLimit)) / 1e18
+    const gasPriceNumber = Number.parseFloat(gasPriceGwei) || 0
+    const gasLimitNumber = Number.parseFloat(gasLimit) || 0
+    const gasPriceWei = gasPriceNumber * 1e9
+    const gasCostEth = (gasPriceWei * gasLimitNumber) / 1e18
     return gasCostEth * ethPrice
   }
 
@@ -475,7 +478,7 @@ export default function SniperBotDashboard() {
                   </div>
                 ) : (
                   poolsDetected.slice(0, 10).map((pool, index) => (
-                    <Card key={pool.poolAddress} className="bg-slate-700/50 border-slate-600">
+                    <Card key={`${pool.poolAddress}-${index}`} className="bg-slate-700/50 border-slate-600">
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-2">
