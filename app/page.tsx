@@ -10,9 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
-import { Progress } from "@/components/ui/progress"
 import { TradingSummary, type TradingSummaryData } from "@/components/trading-summary"
-import { PortfolioDashboard } from "@/components/portfolio-dashboard"
 import { WalletConnector } from "@/components/wallet-connector"
 import {
   Bot,
@@ -25,10 +23,10 @@ import {
   Play,
   Pause,
   RefreshCw,
-  Target,
-  DollarSign,
-  Clock,
   BarChart3,
+  Globe,
+  Timer,
+  Database,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -57,6 +55,17 @@ interface BotStats {
   lastActivity: string
   gasUsed: number
   executionTime: number
+}
+
+interface PoolData {
+  id: string
+  tokenA: string
+  tokenB: string
+  address: string
+  blockHeight: number
+  feeTier: string
+  timestamp: string
+  isLive: boolean
 }
 
 export default function SniperBotDashboard() {
@@ -92,6 +101,30 @@ export default function SniperBotDashboard() {
     gasUsed: 0,
     executionTime: 0,
   })
+
+  // Mock pool data similar to the screenshot
+  const [poolsDetected] = useState<PoolData[]>([
+    {
+      id: "1",
+      tokenA: "MONO",
+      tokenB: "INU",
+      address: "0x37a4E774c01AaE120Ec82593F9167ffc0250a77b",
+      blockHeight: 0,
+      feeTier: "1%",
+      timestamp: "11:25:45 PM",
+      isLive: true,
+    },
+    {
+      id: "2",
+      tokenA: "WETH",
+      tokenB: "MHC",
+      address: "0x0e51bFec105be766AF1c992923F2992F83b30481C",
+      blockHeight: 0,
+      feeTier: "1%",
+      timestamp: "11:25:31 PM",
+      isLive: true,
+    },
+  ])
 
   // Mock trading summary data
   const tradingSummaryData: TradingSummaryData = {
@@ -196,21 +229,24 @@ export default function SniperBotDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-blue">
       <div className="container mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Bot className="h-6 w-6 text-primary" />
+            <div className="p-2 bg-blue-accent/20 rounded-lg border border-blue-accent/30">
+              <Bot className="h-6 w-6 text-blue-bright" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Uniswap Sniper Bot</h1>
-              <p className="text-muted-foreground">Advanced MEV-protected trading automation</p>
+              <h1 className="text-3xl font-bold tracking-tight text-white">Uniswap Sniper Bot</h1>
+              <p className="text-blue-bright/80">Advanced MEV-protected trading automation</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant={config.isActive ? "default" : "secondary"} className="px-3 py-1">
+            <Badge
+              variant={config.isActive ? "default" : "secondary"}
+              className={`px-3 py-1 ${config.isActive ? "bg-green-live text-white" : "bg-gray-600 text-gray-200"}`}
+            >
               {config.isActive ? (
                 <>
                   <Zap className="h-3 w-3 mr-1" />
@@ -224,12 +260,61 @@ export default function SniperBotDashboard() {
               )}
             </Badge>
             {isConnected && (
-              <Badge variant="outline" className="px-3 py-1">
+              <Badge variant="outline" className="px-3 py-1 border-blue-accent text-blue-bright">
                 <Wallet className="h-3 w-3 mr-1" />
                 Connected
               </Badge>
             )}
           </div>
+        </div>
+
+        {/* Status Cards - matching the screenshot */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="status-card">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-300">System Status</CardTitle>
+              <div className="w-2 h-2 bg-green-live rounded-full animate-pulse-blue"></div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold text-white flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-live rounded-full"></div>
+                Connected
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="status-card">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-300">Pools Detected</CardTitle>
+              <TrendingUp className="h-4 w-4 text-green-live" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">{poolsDetected.length}</div>
+              <p className="text-xs text-green-live">+5 recent</p>
+            </CardContent>
+          </Card>
+
+          <Card className="status-card">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-300">Network</CardTitle>
+              <Globe className="h-4 w-4 text-blue-bright" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg font-bold text-white">Base Mainnet</div>
+              <p className="text-xs text-blue-bright">Uniswap V3</p>
+            </CardContent>
+          </Card>
+
+          <Card className="status-card">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-300">Runtime</CardTitle>
+              <Timer className="h-4 w-4 text-purple-fee" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold text-white">0h 4m</div>
+              <p className="text-xs text-gray-400">3s ago</p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Wallet Connection */}
@@ -249,82 +334,109 @@ export default function SniperBotDashboard() {
           }}
         />
 
-        {/* Quick Stats */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Trades</CardTitle>
-              <Target className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalTrades}</div>
-              <p className="text-xs text-muted-foreground">{stats.successfulTrades} successful</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div
-                className={`text-2xl font-bold ${(stats.totalProfit - stats.totalLoss) >= 0 ? "text-green-600" : "text-red-600"}`}
-              >
-                ${(stats.totalProfit - stats.totalLoss).toFixed(2)}
-              </div>
-              <p className="text-xs text-muted-foreground">Total P&L</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {stats.totalTrades > 0 ? ((stats.successfulTrades / stats.totalTrades) * 100).toFixed(1) : 0}%
-              </div>
-              <Progress
-                value={stats.totalTrades > 0 ? (stats.successfulTrades / stats.totalTrades) * 100 : 0}
-                className="mt-2"
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Last Activity</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm font-medium">{stats.lastActivity}</div>
-              <p className="text-xs text-muted-foreground">Status: {stats.isRunning ? "Running" : "Stopped"}</p>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Main Content */}
-        <Tabs defaultValue="dashboard" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="dashboard">
+        <Tabs defaultValue="live-pools" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-4 bg-blue-card/50 border border-blue-accent/20">
+            <TabsTrigger
+              value="dashboard"
+              className="data-[state=active]:bg-blue-accent data-[state=active]:text-white"
+            >
               <BarChart3 className="h-4 w-4 mr-2" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="config">
+            <TabsTrigger value="config" className="data-[state=active]:bg-blue-accent data-[state=active]:text-white">
               <Settings className="h-4 w-4 mr-2" />
               Configuration
             </TabsTrigger>
-            <TabsTrigger value="portfolio">
-              <Wallet className="h-4 w-4 mr-2" />
-              Portfolio
+            <TabsTrigger
+              value="live-pools"
+              className="data-[state=active]:bg-blue-accent data-[state=active]:text-white active-tab"
+            >
+              <Database className="h-4 w-4 mr-2" />
+              Live Pools
             </TabsTrigger>
-            <TabsTrigger value="activity">
+            <TabsTrigger value="activity" className="data-[state=active]:bg-blue-accent data-[state=active]:text-white">
               <Activity className="h-4 w-4 mr-2" />
-              Activity
+              System Logs
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="live-pools" className="space-y-4">
+            <Card className="pool-card">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <Database className="h-5 w-5 text-blue-bright" />
+                  <div>
+                    <CardTitle className="text-white">Live Pool Detection System</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Real-time Uniswap V3 pool discovery and analysis
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {poolsDetected.map((pool, index) => (
+                  <Card key={pool.id} className="pool-card">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Badge className="live-badge">
+                            <div className="w-2 h-2 bg-white rounded-full mr-1"></div>
+                            LIVE #{index + 1}
+                          </Badge>
+                          <Badge className="fee-tier-badge">{pool.feeTier} Fee Tier</Badge>
+                        </div>
+                        <span className="text-xs text-gray-400">{pool.timestamp}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <p className="text-sm text-blue-bright font-medium mb-1">Token A:</p>
+                          <p className="text-white font-bold text-lg">{pool.tokenA}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-blue-bright font-medium mb-1">Token B:</p>
+                          <p className="text-white font-bold text-lg">{pool.tokenB}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t border-gray-600">
+                        <div className="grid grid-cols-2 gap-6">
+                          <div>
+                            <p className="text-sm text-blue-bright font-medium mb-1">Pool Address:</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-gray-300 font-mono text-sm">{pool.address}</p>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0 text-blue-bright hover:bg-blue-accent/20"
+                              >
+                                <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"></path>
+                                  <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"></path>
+                                </svg>
+                              </Button>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-sm text-blue-bright font-medium mb-1">Block Height:</p>
+                            <p className="text-white font-bold">#{pool.blockHeight}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t border-gray-600">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">TX: ...</span>
+                          <span className="text-xs text-green-live">16s ago</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="dashboard" className="space-y-4">
             <TradingSummary data={tradingSummaryData} isLoading={isLoading} onRefresh={handleRefreshStats} />
@@ -333,61 +445,76 @@ export default function SniperBotDashboard() {
           <TabsContent value="config" className="space-y-4">
             <div className="grid gap-6 md:grid-cols-2">
               {/* Trading Configuration */}
-              <Card>
+              <Card className="status-card">
                 <CardHeader>
-                  <CardTitle>Trading Settings</CardTitle>
-                  <CardDescription>Configure your trading parameters</CardDescription>
+                  <CardTitle className="text-white">Trading Settings</CardTitle>
+                  <CardDescription className="text-gray-400">Configure your trading parameters</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="targetToken">Target Token Address</Label>
+                    <Label htmlFor="targetToken" className="text-gray-300">
+                      Target Token Address
+                    </Label>
                     <Input
                       id="targetToken"
                       placeholder="0x..."
                       value={config.targetToken}
                       onChange={(e) => handleConfigChange("targetToken", e.target.value)}
+                      className="bg-blue-dark/50 border-blue-accent/30 text-white placeholder:text-gray-500"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="buyAmount">Buy Amount (ETH)</Label>
+                      <Label htmlFor="buyAmount" className="text-gray-300">
+                        Buy Amount (ETH)
+                      </Label>
                       <Input
                         id="buyAmount"
                         type="number"
                         step="0.01"
                         value={config.buyAmount}
                         onChange={(e) => handleConfigChange("buyAmount", e.target.value)}
+                        className="bg-blue-dark/50 border-blue-accent/30 text-white"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="slippage">Slippage (%)</Label>
+                      <Label htmlFor="slippage" className="text-gray-300">
+                        Slippage (%)
+                      </Label>
                       <Input
                         id="slippage"
                         type="number"
                         value={config.slippage}
                         onChange={(e) => handleConfigChange("slippage", e.target.value)}
+                        className="bg-blue-dark/50 border-blue-accent/30 text-white"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="gasPrice">Gas Price (Gwei)</Label>
+                      <Label htmlFor="gasPrice" className="text-gray-300">
+                        Gas Price (Gwei)
+                      </Label>
                       <Input
                         id="gasPrice"
                         type="number"
                         value={config.gasPrice}
                         onChange={(e) => handleConfigChange("gasPrice", e.target.value)}
+                        className="bg-blue-dark/50 border-blue-accent/30 text-white"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="maxGasLimit">Max Gas Limit</Label>
+                      <Label htmlFor="maxGasLimit" className="text-gray-300">
+                        Max Gas Limit
+                      </Label>
                       <Input
                         id="maxGasLimit"
                         type="number"
                         value={config.maxGasLimit}
                         onChange={(e) => handleConfigChange("maxGasLimit", e.target.value)}
+                        className="bg-blue-dark/50 border-blue-accent/30 text-white"
                       />
                     </div>
                   </div>
@@ -395,16 +522,16 @@ export default function SniperBotDashboard() {
               </Card>
 
               {/* Security & Protection */}
-              <Card>
+              <Card className="status-card">
                 <CardHeader>
-                  <CardTitle>Security & Protection</CardTitle>
-                  <CardDescription>Enable safety features</CardDescription>
+                  <CardTitle className="text-white">Security & Protection</CardTitle>
+                  <CardDescription className="text-gray-400">Enable safety features</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Honeypot Detection</Label>
-                      <p className="text-sm text-muted-foreground">Automatically detect and avoid honeypot tokens</p>
+                      <Label className="text-gray-300">Honeypot Detection</Label>
+                      <p className="text-sm text-gray-500">Automatically detect and avoid honeypot tokens</p>
                     </div>
                     <Switch
                       checked={config.honeypotCheck}
@@ -412,12 +539,12 @@ export default function SniperBotDashboard() {
                     />
                   </div>
 
-                  <Separator />
+                  <Separator className="bg-gray-600" />
 
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>MEV Protection</Label>
-                      <p className="text-sm text-muted-foreground">Protect against MEV attacks and front-running</p>
+                      <Label className="text-gray-300">MEV Protection</Label>
+                      <p className="text-sm text-gray-500">Protect against MEV attacks and front-running</p>
                     </div>
                     <Switch
                       checked={config.mevProtection}
@@ -425,34 +552,35 @@ export default function SniperBotDashboard() {
                     />
                   </div>
 
-                  <Separator />
+                  <Separator className="bg-gray-600" />
 
                   <div className="space-y-2">
-                    <Label htmlFor="minLiquidity">Minimum Liquidity (ETH)</Label>
+                    <Label htmlFor="minLiquidity" className="text-gray-300">
+                      Minimum Liquidity (ETH)
+                    </Label>
                     <Input
                       id="minLiquidity"
                       type="number"
                       step="0.1"
                       value={config.minLiquidity}
                       onChange={(e) => handleConfigChange("minLiquidity", e.target.value)}
+                      className="bg-blue-dark/50 border-blue-accent/30 text-white"
                     />
                   </div>
                 </CardContent>
               </Card>
 
               {/* Auto-Sell Configuration */}
-              <Card className="md:col-span-2">
+              <Card className="md:col-span-2 status-card">
                 <CardHeader>
-                  <CardTitle>Auto-Sell Settings</CardTitle>
-                  <CardDescription>Configure automatic selling parameters</CardDescription>
+                  <CardTitle className="text-white">Auto-Sell Settings</CardTitle>
+                  <CardDescription className="text-gray-400">Configure automatic selling parameters</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Enable Auto-Sell</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Automatically sell tokens based on profit/loss thresholds
-                      </p>
+                      <Label className="text-gray-300">Enable Auto-Sell</Label>
+                      <p className="text-sm text-gray-500">Automatically sell tokens based on profit/loss thresholds</p>
                     </div>
                     <Switch
                       checked={config.autoSell}
@@ -461,32 +589,41 @@ export default function SniperBotDashboard() {
                   </div>
 
                   {config.autoSell && (
-                    <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-600">
                       <div className="space-y-2">
-                        <Label htmlFor="sellPercentage">Sell Percentage (%)</Label>
+                        <Label htmlFor="sellPercentage" className="text-gray-300">
+                          Sell Percentage (%)
+                        </Label>
                         <Input
                           id="sellPercentage"
                           type="number"
                           value={config.sellPercentage}
                           onChange={(e) => handleConfigChange("sellPercentage", e.target.value)}
+                          className="bg-blue-dark/50 border-blue-accent/30 text-white"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="stopLoss">Stop Loss (%)</Label>
+                        <Label htmlFor="stopLoss" className="text-gray-300">
+                          Stop Loss (%)
+                        </Label>
                         <Input
                           id="stopLoss"
                           type="number"
                           value={config.stopLoss}
                           onChange={(e) => handleConfigChange("stopLoss", e.target.value)}
+                          className="bg-blue-dark/50 border-blue-accent/30 text-white"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="takeProfit">Take Profit (%)</Label>
+                        <Label htmlFor="takeProfit" className="text-gray-300">
+                          Take Profit (%)
+                        </Label>
                         <Input
                           id="takeProfit"
                           type="number"
                           value={config.takeProfit}
                           onChange={(e) => handleConfigChange("takeProfit", e.target.value)}
+                          className="bg-blue-dark/50 border-blue-accent/30 text-white"
                         />
                       </div>
                     </div>
@@ -501,7 +638,7 @@ export default function SniperBotDashboard() {
                 <Button
                   onClick={handleStartBot}
                   disabled={isLoading || !isConnected}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-green-live hover:bg-green-600 text-white"
                 >
                   {isLoading ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
                   Start Bot
@@ -513,37 +650,37 @@ export default function SniperBotDashboard() {
                 </Button>
               )}
 
-              <Button variant="outline" onClick={handleRefreshStats}>
+              <Button
+                variant="outline"
+                onClick={handleRefreshStats}
+                className="border-blue-accent text-blue-bright hover:bg-blue-accent/20 bg-transparent"
+              >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh Stats
               </Button>
             </div>
 
             {!isConnected && (
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
+              <Alert className="border-yellow-500/50 bg-yellow-500/10">
+                <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                <AlertDescription className="text-yellow-200">
                   Please connect your wallet to start trading. The bot requires wallet access to execute transactions.
                 </AlertDescription>
               </Alert>
             )}
           </TabsContent>
 
-          <TabsContent value="portfolio" className="space-y-4">
-            <PortfolioDashboard />
-          </TabsContent>
-
           <TabsContent value="activity" className="space-y-4">
-            <Card>
+            <Card className="status-card">
               <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>Latest bot actions and transactions</CardDescription>
+                <CardTitle className="text-white">System Logs</CardTitle>
+                <CardDescription className="text-gray-400">Latest bot actions and system events</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-8 text-gray-400">
                   <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No recent activity</p>
-                  <p className="text-sm">Start the bot to see trading activity here</p>
+                  <p className="text-sm">Start the bot to see system logs here</p>
                 </div>
               </CardContent>
             </Card>
