@@ -1,5 +1,28 @@
 import { ethers } from "ethers"
 
+declare global {
+  interface Window {
+    ethereum?: any
+  }
+}
+
+export interface MetaMaskError extends Error {
+  code: number
+  data?: any
+}
+
+export interface NetworkConfig {
+  chainId: string
+  chainName: string
+  nativeCurrency: {
+    name: string
+    symbol: string
+    decimals: number
+  }
+  rpcUrls: string[]
+  blockExplorerUrls: string[]
+}
+
 export interface MetaMaskState {
   isInstalled: boolean
   isConnected: boolean
@@ -10,237 +33,266 @@ export interface MetaMaskState {
 }
 
 export interface MetaMaskCallbacks {
-  onAccountChanged: (account: string | null) => void
-  onChainChanged: (chainId: number) => void
-  onConnect: (account: string) => void
-  onDisconnect: () => void
+  onAccountChanged?: (account: string | null) => void
+  onChainChanged?: (chainId: number) => void
+  onConnect?: (account: string) => void
+  onDisconnect?: () => void
+}
+
+export const BASE_NETWORK: NetworkConfig = {
+  chainId: "0x2105", // 8453 in hex
+  chainName: "Base",
+  nativeCurrency: {
+    name: "Ethereum",
+    symbol: "ETH",
+    decimals: 18,
+  },
+  rpcUrls: ["https://mainnet.base.org"],
+  blockExplorerUrls: ["https://basescan.org"],
+}
+
+export const BASE_SEPOLIA_NETWORK: NetworkConfig = {
+  chainId: "0x14A34", // 84532 in hex
+  chainName: "Base Sepolia",
+  nativeCurrency: {
+    name: "Ethereum",
+    symbol: "ETH",
+    decimals: 18,
+  },
+  rpcUrls: ["https://sepolia.base.org"],
+  blockExplorerUrls: ["https://sepolia.basescan.org"],
 }
 
 export class EnhancedMetaMask {
-  private provider: any
+  private provider: any = null
   private signer: ethers.Signer | null = null
-  private state: MetaMaskState = {
-    isInstalled: false,
-    isConnected: false,
-    account: null,
-    chainId: null,
-    balance: "0",
-    networkName: "Unknown",
-  }
-  private callbacks: MetaMaskCallbacks
-  private connectionAttempts = 0
-  private maxConnectionAttempts = 3
+  private account: string | null = null
+  private chainId: number | null = null
+  private balance = "0"
+  private networkName = "Unknown"
+  private callbacks: MetaMaskCallbacks = {}
 
-  constructor(callbacks: MetaMaskCallbacks) {
-    this.callbacks = callbacks
-    this.checkInstallation()
-    this.setupEventListeners()
+  constructor(callbacks?: MetaMaskCallbacks) {
+    this.callbacks = callbacks || {}
+
+    if (typeof window !== "undefined" && window.ethereum) {
+      this.provider = window.ethereum
+      this.setupEventListeners()
+      this.initializeState()
+    }
   }
 
-  private checkInstallation(): void {
-    this.state.isInstalled = typeof window !== "undefined" && !!window.ethereum?.isMetaMask
+  private async initializeState() {
+    try {
+      if (this.provider) {
+        // Check if already connected
+        const accounts = await this.provider.request({ method: "eth_accounts" })
+        if (accounts && accounts.length > 0) {
+          this.account = accounts[0]
+          await this.updateState()
+        }
+      }
+    } catch (error) {
+      console.error("Failed to initialize MetaMask state:", error)
+    }
   }
 
-  private setupEventListeners(): void {
-    if (!this.state.isInstalled) return
+  private async updateState() {
+    if (!this.provider || !this.account) return
 
-    this.provider = window.ethereum
+    try {
+      // Get chain ID
+      const chainId = await this.provider.request({ method: "eth_chainId" })
+      this.chainId = Number.parseInt(chainId, 16)
 
-    // Account changes
-    this.provider.on("accountsChanged", (accounts: string[]) => {
-      const account = accounts[0] || null
-      this.state.account = account
-      this.state.isConnected = !!account
-      this.callbacks.onAccountChanged(account)
+      // Get balance
+      const balance = await this.provider.request({
+        method: "eth_getBalance",
+        params: [this.account, "latest"],
+      })
+      this.balance = ethers.formatEther(balance)
 
-      if (account) {
-        this.updateBalance()
+      // Get network name
+      this.networkName = this.getNetworkName(this.chainId)
+    } catch (error) {
+      console.error("Failed to update MetaMask state:", error)
+    }
+  }
+
+  private getNetworkName(chainId: number): string {
+    const networkNames: { [key: number]: string } = {
+      1: "Ethereum Mainnet",
+      5: "Goerli Testnet",
+      11155111: "Sepolia Testnet",
+      137: "Polygon Mainnet",
+      80001: "Polygon Mumbai",
+      56: "BSC Mainnet",
+      97: "BSC Testnet",
+      8453: "Base Mainnet",
+      84531: "Base Goerli",
+      84532: "Base Sepolia",
+    }
+    return networkNames[chainId] || `Unknown Network (${chainId})`
+  }
+
+  private setupEventListeners() {
+    if (!this.provider) return
+
+    this.provider.on("accountsChanged", async (accounts: string[]) => {
+      const newAccount = accounts[0] || null
+      this.account = newAccount
+
+      if (newAccount) {
+        await this.updateState()
+        this.callbacks.onAccountChanged?.(newAccount)
+      } else {
+        this.signer = null
+        this.balance = "0"
+        this.callbacks.onDisconnect?.()
       }
     })
 
-    // Chain changes
-    this.provider.on("chainChanged", (chainId: string) => {
-      const numericChainId = Number.parseInt(chainId, 16)
-      this.state.chainId = numericChainId
-      this.state.networkName = this.getNetworkName(numericChainId)
-      this.callbacks.onChainChanged(numericChainId)
+    this.provider.on("chainChanged", async (chainId: string) => {
+      this.chainId = Number.parseInt(chainId, 16)
+      this.networkName = this.getNetworkName(this.chainId)
+      await this.updateState()
+      this.callbacks.onChainChanged?.(this.chainId)
     })
 
-    // Connection events
     this.provider.on("connect", (connectInfo: { chainId: string }) => {
-      console.log("MetaMask connected:", connectInfo)
+      this.chainId = Number.parseInt(connectInfo.chainId, 16)
+      this.networkName = this.getNetworkName(this.chainId)
+      if (this.account) {
+        this.callbacks.onConnect?.(this.account)
+      }
     })
 
-    this.provider.on("disconnect", (error: any) => {
-      console.log("MetaMask disconnected:", error)
-      this.state.isConnected = false
-      this.state.account = null
-      this.callbacks.onDisconnect()
+    this.provider.on("disconnect", () => {
+      this.account = null
+      this.signer = null
+      this.chainId = null
+      this.balance = "0"
+      this.networkName = "Unknown"
+      this.callbacks.onDisconnect?.()
     })
+  }
+
+  getState(): MetaMaskState {
+    return {
+      isInstalled: this.isMetaMaskInstalled(),
+      isConnected: !!this.account,
+      account: this.account,
+      chainId: this.chainId,
+      balance: this.balance,
+      networkName: this.networkName,
+    }
+  }
+
+  isMetaMaskInstalled(): boolean {
+    return typeof window !== "undefined" && !!window.ethereum && !!window.ethereum.isMetaMask
   }
 
   async connect(): Promise<string> {
-    if (!this.state.isInstalled) {
-      throw new Error("MetaMask is not installed. Please install MetaMask to continue.")
+    if (!this.isMetaMaskInstalled()) {
+      throw new Error("MetaMask is not installed")
     }
 
-    this.connectionAttempts++
-
     try {
-      // Request account access with timeout
-      const accounts = (await Promise.race([
-        this.provider.request({
-          method: "eth_requestAccounts",
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Connection timeout")), 10000)),
-      ])) as string[]
+      const accounts = await this.provider.request({
+        method: "eth_requestAccounts",
+      })
 
       if (!accounts || accounts.length === 0) {
-        throw new Error("No accounts found. Please unlock MetaMask.")
+        throw new Error("No accounts found")
       }
 
-      const account = accounts[0]
-      this.state.account = account
-      this.state.isConnected = true
-
-      // Get chain info
-      const chainId = await this.provider.request({ method: "eth_chainId" })
-      this.state.chainId = Number.parseInt(chainId, 16)
-      this.state.networkName = this.getNetworkName(this.state.chainId)
-
-      // Switch to Base if not already
-      if (this.state.chainId !== 8453) {
-        await this.switchToBase()
-      }
-
-      // Create signer
+      this.account = accounts[0]
       const ethersProvider = new ethers.BrowserProvider(this.provider)
       this.signer = await ethersProvider.getSigner()
 
-      // Update balance
-      await this.updateBalance()
+      await this.updateState()
+      this.callbacks.onConnect?.(this.account)
 
-      // Reset connection attempts on success
-      this.connectionAttempts = 0
-
-      this.callbacks.onConnect(account)
-      return account
+      return this.account
     } catch (error: any) {
       if (error.code === 4001) {
-        throw new Error("Connection rejected by user")
+        throw new Error("User rejected the connection request")
       }
-
-      if (this.connectionAttempts < this.maxConnectionAttempts) {
-        // Retry connection
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        return this.connect()
-      }
-
-      throw new Error(`Connection failed after ${this.maxConnectionAttempts} attempts: ${error.message}`)
+      throw new Error(`Failed to connect to MetaMask: ${error.message}`)
     }
   }
 
-  async switchToBase(): Promise<void> {
-    if (!this.provider) throw new Error("MetaMask not available")
+  async switchToNetwork(network: NetworkConfig): Promise<void> {
+    if (!this.provider) {
+      throw new Error("MetaMask is not available")
+    }
 
     try {
       await this.provider.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0x2105" }], // Base mainnet
+        params: [{ chainId: network.chainId }],
       })
-    } catch (switchError: any) {
-      // Chain not added, try to add it
-      if (switchError.code === 4902) {
-        await this.addBaseNetwork()
+    } catch (error: any) {
+      // This error code indicates that the chain has not been added to MetaMask
+      if (error.code === 4902) {
+        try {
+          await this.provider.request({
+            method: "wallet_addEthereumChain",
+            params: [network],
+          })
+        } catch (addError: any) {
+          throw new Error(`Failed to add network: ${addError.message}`)
+        }
       } else {
-        throw switchError
+        throw new Error(`Failed to switch network: ${error.message}`)
       }
     }
   }
 
-  private async addBaseNetwork(): Promise<void> {
-    if (!this.provider) throw new Error("MetaMask not available")
+  async switchToBase(): Promise<void> {
+    await this.switchToNetwork(BASE_NETWORK)
+  }
 
-    await this.provider.request({
-      method: "wallet_addEthereumChain",
-      params: [
-        {
-          chainId: "0x2105",
-          chainName: "Base",
-          nativeCurrency: {
-            name: "Ethereum",
-            symbol: "ETH",
-            decimals: 18,
-          },
-          rpcUrls: ["https://mainnet.base.org"],
-          blockExplorerUrls: ["https://basescan.org"],
-          iconUrls: ["https://bridge.base.org/icons/base.svg"],
-        },
-      ],
+  async switchToBaseSepolia(): Promise<void> {
+    await this.switchToNetwork(BASE_SEPOLIA_NETWORK)
+  }
+
+  async getCurrentNetwork(): Promise<{ chainId: number; name: string }> {
+    if (!this.provider) {
+      throw new Error("MetaMask is not available")
+    }
+
+    const chainId = await this.provider.request({ method: "eth_chainId" })
+    const chainIdNumber = Number.parseInt(chainId, 16)
+
+    return {
+      chainId: chainIdNumber,
+      name: this.getNetworkName(chainIdNumber),
+    }
+  }
+
+  async getBalance(address?: string): Promise<string> {
+    if (!this.provider) {
+      throw new Error("MetaMask is not available")
+    }
+
+    const targetAddress = address || this.account
+    if (!targetAddress) {
+      throw new Error("No address provided")
+    }
+
+    const balance = await this.provider.request({
+      method: "eth_getBalance",
+      params: [targetAddress, "latest"],
     })
+
+    return ethers.formatEther(balance)
   }
 
-  async updateBalance(): Promise<void> {
-    if (!this.state.account || !this.provider) return
-
-    try {
-      const balance = await this.provider.request({
-        method: "eth_getBalance",
-        params: [this.state.account, "latest"],
-      })
-
-      this.state.balance = ethers.formatEther(balance)
-    } catch (error) {
-      console.error("Error updating balance:", error)
+  async addToken(tokenAddress: string, tokenSymbol: string, tokenDecimals: number): Promise<void> {
+    if (!this.provider) {
+      throw new Error("MetaMask is not available")
     }
-  }
-
-  async signMessage(message: string): Promise<string> {
-    if (!this.signer) throw new Error("Not connected to MetaMask")
-    return await this.signer.signMessage(message)
-  }
-
-  async sendTransaction(transaction: any): Promise<string> {
-    if (!this.signer) throw new Error("Not connected to MetaMask")
-
-    const tx = await this.signer.sendTransaction(transaction)
-    return tx.hash
-  }
-
-  private getNetworkName(chainId: number): string {
-    const networks: { [key: number]: string } = {
-      1: "Ethereum Mainnet",
-      8453: "Base",
-      84531: "Base Goerli",
-      5: "Goerli",
-      11155111: "Sepolia",
-    }
-    return networks[chainId] || `Unknown (${chainId})`
-  }
-
-  disconnect(): void {
-    this.state.isConnected = false
-    this.state.account = null
-    this.signer = null
-    this.connectionAttempts = 0
-    this.callbacks.onDisconnect()
-  }
-
-  getState(): MetaMaskState {
-    return { ...this.state }
-  }
-
-  getSigner(): ethers.Signer | null {
-    return this.signer
-  }
-
-  isOnCorrectNetwork(): boolean {
-    return this.state.chainId === 8453 // Base mainnet
-  }
-
-  // Utility methods
-  async addTokenToWallet(tokenAddress: string, tokenSymbol: string, tokenDecimals: number): Promise<boolean> {
-    if (!this.provider) return false
 
     try {
       await this.provider.request({
@@ -254,84 +306,92 @@ export class EnhancedMetaMask {
           },
         },
       })
-      return true
-    } catch (error) {
-      console.error("Error adding token to wallet:", error)
-      return false
+    } catch (error: any) {
+      throw new Error(`Failed to add token: ${error.message}`)
     }
   }
 
-  async getGasPrice(): Promise<bigint> {
-    if (!this.provider) throw new Error("MetaMask not available")
-
-    const gasPrice = await this.provider.request({
-      method: "eth_gasPrice",
-    })
-
-    return BigInt(gasPrice)
-  }
-
-  async estimateGas(transaction: any): Promise<bigint> {
-    if (!this.provider) throw new Error("MetaMask not available")
-
-    const gasEstimate = await this.provider.request({
-      method: "eth_estimateGas",
-      params: [transaction],
-    })
-
-    return BigInt(gasEstimate)
-  }
-
-  // Enhanced connection status
-  async checkConnection(): Promise<boolean> {
-    if (!this.state.isInstalled) return false
-
-    try {
-      const accounts = await this.provider.request({ method: "eth_accounts" })
-      const isConnected = accounts && accounts.length > 0
-
-      if (isConnected !== this.state.isConnected) {
-        this.state.isConnected = isConnected
-        this.state.account = isConnected ? accounts[0] : null
-      }
-
-      return isConnected
-    } catch (error) {
-      return false
+  async signMessage(message: string): Promise<string> {
+    if (!this.signer) {
+      throw new Error("No signer available")
     }
+
+    return await this.signer.signMessage(message)
   }
 
-  // Auto-reconnect functionality
-  async autoReconnect(): Promise<boolean> {
-    try {
-      const isConnected = await this.checkConnection()
-      if (isConnected && this.state.account) {
-        const ethersProvider = new ethers.BrowserProvider(this.provider)
-        this.signer = await ethersProvider.getSigner()
-        await this.updateBalance()
-        return true
-      }
-      return false
-    } catch (error) {
-      return false
+  async sendTransaction(transaction: any): Promise<string> {
+    if (!this.signer) {
+      throw new Error("No signer available")
     }
+
+    const tx = await this.signer.sendTransaction(transaction)
+    return tx.hash
+  }
+
+  getAccount(): string | null {
+    return this.account
+  }
+
+  getSigner(): ethers.Signer | null {
+    return this.signer
+  }
+
+  getChainId(): number | null {
+    return this.chainId
+  }
+
+  isConnected(): boolean {
+    return !!this.account && !!this.signer
+  }
+
+  disconnect(): void {
+    this.account = null
+    this.signer = null
+    this.chainId = null
+    this.balance = "0"
+    this.networkName = "Unknown"
   }
 }
 
-// Helper function to check if MetaMask is installed
+// Helper functions
 export function isMetaMaskInstalled(): boolean {
-  return typeof window !== "undefined" && !!window.ethereum?.isMetaMask
+  return typeof window !== "undefined" && !!window.ethereum && !!window.ethereum.isMetaMask
 }
 
-// Helper function to install MetaMask
 export function redirectToMetaMaskInstall(): void {
   window.open("https://metamask.io/download/", "_blank")
 }
 
-// Helper function to detect mobile
-export function isMobile(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-  )
+export function getMetaMaskDownloadUrl(): string {
+  return "https://metamask.io/download/"
 }
+
+export async function detectMetaMaskProvider(): Promise<any> {
+  if (typeof window === "undefined") return null
+
+  return new Promise((resolve) => {
+    if (window.ethereum) {
+      resolve(window.ethereum)
+    } else {
+      const handleEthereum = () => {
+        if (window.ethereum) {
+          resolve(window.ethereum)
+        } else {
+          resolve(null)
+        }
+      }
+
+      window.addEventListener("ethereum#initialized", handleEthereum, { once: true })
+
+      setTimeout(() => {
+        handleEthereum()
+      }, 3000)
+    }
+  })
+}
+
+// Create a singleton instance
+export const metaMask = new EnhancedMetaMask()
+
+// Export default
+export default EnhancedMetaMask

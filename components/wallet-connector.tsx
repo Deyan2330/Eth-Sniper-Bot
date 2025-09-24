@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Wallet, ExternalLink, Shield, AlertTriangle, CheckCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { EnhancedMetaMask, redirectToMetaMaskInstall } from "@/lib/enhanced-metamask"
+import { EnhancedMetaMask, redirectToMetaMaskInstall, type MetaMaskState } from "@/lib/enhanced-metamask"
 
 interface WalletConnectorProps {
   onConnect: (connection: { type: "metamask" | "private-key"; address: string; signer?: any }) => void
@@ -22,11 +22,11 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
   const [showPrivateKeyInput, setShowPrivateKeyInput] = useState(false)
   const [privateKey, setPrivateKey] = useState("")
   const [metaMask, setMetaMask] = useState<EnhancedMetaMask | null>(null)
-  const [metaMaskState, setMetaMaskState] = useState({
+  const [metaMaskState, setMetaMaskState] = useState<MetaMaskState>({
     isInstalled: false,
     isConnected: false,
-    account: null as string | null,
-    chainId: null as number | null,
+    account: null,
+    chainId: null,
     balance: "0",
     networkName: "Unknown",
   })
@@ -35,16 +35,33 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
     if (typeof window !== "undefined") {
       const mm = new EnhancedMetaMask({
         onAccountChanged: (account) => {
-          setMetaMaskState((prev) => ({ ...prev, account, isConnected: !!account }))
+          setMetaMaskState((prev) => ({
+            ...prev,
+            account,
+            isConnected: !!account,
+          }))
         },
         onChainChanged: (chainId) => {
-          setMetaMaskState((prev) => ({ ...prev, chainId }))
+          setMetaMaskState((prev) => ({
+            ...prev,
+            chainId,
+            networkName: getNetworkName(chainId),
+          }))
         },
         onConnect: (account) => {
-          setMetaMaskState((prev) => ({ ...prev, account, isConnected: true }))
+          setMetaMaskState((prev) => ({
+            ...prev,
+            account,
+            isConnected: true,
+          }))
         },
         onDisconnect: () => {
-          setMetaMaskState((prev) => ({ ...prev, isConnected: false, account: null }))
+          setMetaMaskState((prev) => ({
+            ...prev,
+            isConnected: false,
+            account: null,
+            balance: "0",
+          }))
         },
       })
 
@@ -52,6 +69,22 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
       setMetaMaskState(mm.getState())
     }
   }, [])
+
+  const getNetworkName = (chainId: number): string => {
+    const networkNames: { [key: number]: string } = {
+      1: "Ethereum Mainnet",
+      5: "Goerli Testnet",
+      11155111: "Sepolia Testnet",
+      137: "Polygon Mainnet",
+      80001: "Polygon Mumbai",
+      56: "BSC Mainnet",
+      97: "BSC Testnet",
+      8453: "Base Mainnet",
+      84531: "Base Goerli",
+      84532: "Base Sepolia",
+    }
+    return networkNames[chainId] || `Unknown Network (${chainId})`
+  }
 
   const handleMetaMaskConnect = async () => {
     if (!metaMask) return
@@ -87,9 +120,19 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
 
     setIsConnecting(true)
     try {
+      // Validate private key format
+      let cleanKey = privateKey.trim()
+      if (!cleanKey.startsWith("0x")) {
+        cleanKey = "0x" + cleanKey
+      }
+
+      if (cleanKey.length !== 66) {
+        throw new Error("Invalid private key format. Must be 64 hex characters.")
+      }
+
       onConnect({
         type: "private-key",
-        address: "0x" + "0".repeat(40), // Placeholder - will be set by wallet manager
+        address: cleanKey, // This will be replaced by the actual address in the parent component
       })
       setShowPrivateKeyInput(false)
       setPrivateKey("")

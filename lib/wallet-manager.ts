@@ -1,6 +1,12 @@
 import { ethers } from "ethers"
 import { EnhancedMetaMask } from "./enhanced-metamask"
 
+export interface WalletConfig {
+  type: "metamask" | "private_key"
+  privateKey?: string
+  rpcUrl?: string
+}
+
 export interface WalletInfo {
   address: string
   balance: string
@@ -9,160 +15,115 @@ export interface WalletInfo {
   isConnected: boolean
 }
 
-export interface TokenBalance {
-  address: string
-  symbol: string
-  name: string
-  balance: string
-  decimals: number
-  price?: number
-  value?: number
-}
-
 export class WalletManager {
-  private metaMask: EnhancedMetaMask
   private provider: ethers.Provider | null = null
   private signer: ethers.Signer | null = null
-  private walletInfo: WalletInfo | null = null
-  private tokenBalances: Map<string, TokenBalance> = new Map()
+  private metaMask: EnhancedMetaMask | null = null
+  private walletType: "metamask" | "private_key" | null = null
+  private currentAddress: string | null = null
 
   constructor() {
-    this.metaMask = new EnhancedMetaMask({
-      onAccountChanged: this.handleAccountChanged.bind(this),
-      onChainChanged: this.handleChainChanged.bind(this),
-      onConnect: this.handleConnect.bind(this),
-      onDisconnect: this.handleDisconnect.bind(this),
-    })
+    this.metaMask = new EnhancedMetaMask()
   }
 
-  async connect(): Promise<WalletInfo> {
-    try {
-      const account = await this.metaMask.connect()
+  async connectMetaMask(): Promise<WalletInfo> {
+    if (!this.metaMask) {
+      throw new Error("MetaMask not initialized")
+    }
 
+    try {
+      const { address, signer } = await this.metaMask.connect()
+      this.signer = signer
+      this.walletType = "metamask"
+      this.currentAddress = address
+
+      // Get provider from MetaMask
       if (typeof window !== "undefined" && window.ethereum) {
         this.provider = new ethers.BrowserProvider(window.ethereum)
-        this.signer = await this.provider.getSigner()
       }
 
-      await this.updateWalletInfo()
-
-      if (!this.walletInfo) {
-        throw new Error("Failed to get wallet information")
-      }
-
-      return this.walletInfo
-    } catch (error) {
-      console.error("Error connecting wallet:", error)
-      throw error
+      const walletInfo = await this.getWalletInfo()
+      return walletInfo
+    } catch (error: any) {
+      throw new Error(`Failed to connect MetaMask: ${error.message}`)
     }
   }
 
-  async disconnect(): Promise<void> {
-    this.metaMask.disconnect()
-    this.provider = null
-    this.signer = null
-    this.walletInfo = null
-    this.tokenBalances.clear()
-  }
-
-  private async handleAccountChanged(account: string | null): Promise<void> {
-    if (account) {
-      await this.updateWalletInfo()
-    } else {
-      this.walletInfo = null
-      this.tokenBalances.clear()
-    }
-  }
-
-  private async handleChainChanged(chainId: number): Promise<void> {
-    await this.updateWalletInfo()
-  }
-
-  private async handleConnect(account: string): Promise<void> {
-    await this.updateWalletInfo()
-  }
-
-  private async handleDisconnect(): Promise<void> {
-    this.walletInfo = null
-    this.tokenBalances.clear()
-  }
-
-  private async updateWalletInfo(): Promise<void> {
+  async connectPrivateKey(privateKey: string, rpcUrl: string): Promise<WalletInfo> {
     try {
-      const state = this.metaMask.getState()
-
-      if (!state.account || !this.provider) {
-        this.walletInfo = null
-        return
+      // Validate private key format
+      if (!privateKey.startsWith("0x")) {
+        privateKey = "0x" + privateKey
       }
 
-      const balance = await this.provider.getBalance(state.account)
-
-      this.walletInfo = {
-        address: state.account,
-        balance: ethers.formatEther(balance),
-        chainId: state.chainId || 0,
-        networkName: state.networkName,
-        isConnected: state.isConnected,
+      if (privateKey.length !== 66) {
+        throw new Error("Invalid private key length")
       }
-    } catch (error) {
-      console.error("Error updating wallet info:", error)
+
+      // Create provider and signer
+      this.provider = new ethers.JsonRpcProvider(rpcUrl)
+      this.signer = new ethers.Wallet(privateKey, this.provider)
+      this.walletType = "private_key"
+      this.currentAddress = await this.signer.getAddress()
+
+      const walletInfo = await this.getWalletInfo()
+      return walletInfo
+    } catch (error: any) {
+      throw new Error(`Failed to connect with private key: ${error.message}`)
     }
   }
 
-  async getTokenBalance(tokenAddress: string): Promise<TokenBalance | null> {
-    if (!this.provider || !this.walletInfo) {
+  async getWalletInfo(): Promise<WalletInfo> {
+    if (!this.provider || !this.signer || !this.currentAddress) {
       throw new Error("Wallet not connected")
     }
 
     try {
-      const contract = new ethers.Contract(
-        tokenAddress,
-        [
-          "function balanceOf(address) view returns (uint256)",
-          "function symbol() view returns (string)",
-          "function name() view returns (string)",
-          "function decimals() view returns (uint8)",
-        ],
-        this.provider,
-      )
-
-      const [balance, symbol, name, decimals] = await Promise.all([
-        contract.balanceOf(this.walletInfo.address),
-        contract.symbol(),
-        contract.name(),
-        contract.decimals(),
+      const [balance, network] = await Promise.all([
+        this.provider.getBalance(this.currentAddress),
+        this.provider.getNetwork(),
       ])
 
-      const tokenBalance: TokenBalance = {
-        address: tokenAddress,
-        symbol,
-        name,
-        balance: ethers.formatUnits(balance, decimals),
-        decimals,
+      const networkNames: { [key: string]: string } = {
+        "1": "Ethereum Mainnet",
+        "5": "Goerli Testnet",
+        "11155111": "Sepolia Testnet",
+        "137": "Polygon Mainnet",
+        "80001": "Polygon Mumbai",
+        "56": "BSC Mainnet",
+        "97": "BSC Testnet",
+        "8453": "Base Mainnet",
+        "84531": "Base Goerli",
+        "84532": "Base Sepolia",
       }
 
-      this.tokenBalances.set(tokenAddress, tokenBalance)
-      return tokenBalance
-    } catch (error) {
-      console.error(`Error getting token balance for ${tokenAddress}:`, error)
-      return null
+      return {
+        address: this.currentAddress,
+        balance: ethers.formatEther(balance),
+        chainId: Number(network.chainId),
+        networkName: networkNames[network.chainId.toString()] || `Unknown (${network.chainId})`,
+        isConnected: true,
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to get wallet info: ${error.message}`)
     }
   }
 
-  async getMultipleTokenBalances(tokenAddresses: string[]): Promise<TokenBalance[]> {
-    const promises = tokenAddresses.map((address) => this.getTokenBalance(address))
-    const results = await Promise.allSettled(promises)
-
-    return results
-      .filter(
-        (result): result is PromiseFulfilledResult<TokenBalance> =>
-          result.status === "fulfilled" && result.value !== null,
-      )
-      .map((result) => result.value)
+  async switchNetwork(chainId: number): Promise<void> {
+    if (this.walletType === "metamask" && this.metaMask) {
+      await this.metaMask.switchToNetwork({
+        chainId: `0x${chainId.toString(16)}`,
+        chainName: "Custom Network",
+        nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+        rpcUrls: [""],
+        blockExplorerUrls: [""],
+      })
+    } else {
+      throw new Error("Network switching only supported with MetaMask")
+    }
   }
 
-  async sendTransaction(transaction: any): Promise<string> {
+  async sendTransaction(transaction: ethers.TransactionRequest): Promise<string> {
     if (!this.signer) {
       throw new Error("Wallet not connected")
     }
@@ -170,9 +131,8 @@ export class WalletManager {
     try {
       const tx = await this.signer.sendTransaction(transaction)
       return tx.hash
-    } catch (error) {
-      console.error("Error sending transaction:", error)
-      throw error
+    } catch (error: any) {
+      throw new Error(`Transaction failed: ${error.message}`)
     }
   }
 
@@ -183,111 +143,173 @@ export class WalletManager {
 
     try {
       return await this.signer.signMessage(message)
-    } catch (error) {
-      console.error("Error signing message:", error)
-      throw error
+    } catch (error: any) {
+      throw new Error(`Message signing failed: ${error.message}`)
     }
   }
 
-  async switchNetwork(chainId: number): Promise<void> {
-    if (chainId === 8453) {
-      await this.metaMask.switchToBase()
+  async getTokenBalance(tokenAddress: string, decimals = 18): Promise<string> {
+    if (!this.provider || !this.currentAddress) {
+      throw new Error("Wallet not connected")
+    }
+
+    try {
+      if (tokenAddress === "0x0000000000000000000000000000000000000000") {
+        const balance = await this.provider.getBalance(this.currentAddress)
+        return ethers.formatEther(balance)
+      }
+
+      const tokenContract = new ethers.Contract(
+        tokenAddress,
+        ["function balanceOf(address) view returns (uint256)"],
+        this.provider,
+      )
+
+      const balance = await tokenContract.balanceOf(this.currentAddress)
+      return ethers.formatUnits(balance, decimals)
+    } catch (error: any) {
+      throw new Error(`Failed to get token balance: ${error.message}`)
+    }
+  }
+
+  async estimateGas(transaction: ethers.TransactionRequest): Promise<string> {
+    if (!this.provider) {
+      throw new Error("Provider not available")
+    }
+
+    try {
+      const gasEstimate = await this.provider.estimateGas(transaction)
+      return gasEstimate.toString()
+    } catch (error: any) {
+      throw new Error(`Gas estimation failed: ${error.message}`)
+    }
+  }
+
+  async getCurrentGasPrice(): Promise<string> {
+    if (!this.provider) {
+      throw new Error("Provider not available")
+    }
+
+    try {
+      const feeData = await this.provider.getFeeData()
+      const gasPrice = feeData.gasPrice || ethers.parseUnits("20", "gwei")
+      return ethers.formatUnits(gasPrice, "gwei")
+    } catch (error: any) {
+      throw new Error(`Failed to get gas price: ${error.message}`)
+    }
+  }
+
+  async waitForTransaction(txHash: string, confirmations = 1): Promise<ethers.TransactionReceipt | null> {
+    if (!this.provider) {
+      throw new Error("Provider not available")
+    }
+
+    try {
+      return await this.provider.waitForTransaction(txHash, confirmations)
+    } catch (error: any) {
+      throw new Error(`Failed to wait for transaction: ${error.message}`)
+    }
+  }
+
+  async addToken(tokenAddress: string, symbol: string, decimals: number): Promise<void> {
+    if (this.walletType === "metamask" && this.metaMask) {
+      await this.metaMask.addToken(tokenAddress, symbol, decimals)
     } else {
-      throw new Error(`Switching to chain ${chainId} not supported`)
+      throw new Error("Adding tokens only supported with MetaMask")
     }
   }
 
-  async addToken(tokenAddress: string): Promise<boolean> {
-    const tokenBalance = await this.getTokenBalance(tokenAddress)
+  disconnect(): void {
+    this.provider = null
+    this.signer = null
+    this.walletType = null
+    this.currentAddress = null
 
-    if (!tokenBalance) {
-      return false
+    if (this.metaMask) {
+      this.metaMask.disconnect()
     }
-
-    return await this.metaMask.addTokenToWallet(tokenAddress, tokenBalance.symbol, tokenBalance.decimals)
   }
 
-  getWalletInfo(): WalletInfo | null {
-    return this.walletInfo
+  isConnected(): boolean {
+    return !!(this.provider && this.signer && this.currentAddress)
   }
 
-  getProvider(): ethers.Provider | null {
-    return this.provider
+  getWalletType(): "metamask" | "private_key" | null {
+    return this.walletType
+  }
+
+  getCurrentAddress(): string | null {
+    return this.currentAddress
   }
 
   getSigner(): ethers.Signer | null {
     return this.signer
   }
 
-  isConnected(): boolean {
-    return this.walletInfo?.isConnected || false
+  getProvider(): ethers.Provider | null {
+    return this.provider
   }
 
-  isOnCorrectNetwork(): boolean {
-    return this.walletInfo?.chainId === 8453 // Base mainnet
-  }
-
-  getAddress(): string | null {
-    return this.walletInfo?.address || null
-  }
-
-  getBalance(): string {
-    return this.walletInfo?.balance || "0"
-  }
-
-  getTokenBalances(): TokenBalance[] {
-    return Array.from(this.tokenBalances.values())
-  }
-
-  async refreshBalances(): Promise<void> {
-    await this.updateWalletInfo()
-
-    // Refresh token balances
-    const tokenAddresses = Array.from(this.tokenBalances.keys())
-    await this.getMultipleTokenBalances(tokenAddresses)
-  }
-
-  async estimateGas(transaction: any): Promise<bigint> {
-    if (!this.provider) {
-      throw new Error("Wallet not connected")
+  async generateRandomWallet(): Promise<{
+    address: string
+    privateKey: string
+    mnemonic: string
+  }> {
+    try {
+      const wallet = ethers.Wallet.createRandom()
+      return {
+        address: wallet.address,
+        privateKey: wallet.privateKey,
+        mnemonic: wallet.mnemonic?.phrase || "",
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to generate wallet: ${error.message}`)
     }
-
-    return await this.provider.estimateGas(transaction)
   }
 
-  async getGasPrice(): Promise<bigint> {
-    if (!this.provider) {
-      throw new Error("Wallet not connected")
+  async importFromMnemonic(
+    mnemonic: string,
+    index = 0,
+  ): Promise<{
+    address: string
+    privateKey: string
+  }> {
+    try {
+      const wallet = ethers.Wallet.fromPhrase(mnemonic, undefined, `m/44'/60'/0'/0/${index}`)
+      return {
+        address: wallet.address,
+        privateKey: wallet.privateKey,
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to import from mnemonic: ${error.message}`)
     }
-
-    const feeData = await this.provider.getFeeData()
-    return feeData.gasPrice || BigInt(0)
   }
 
-  async waitForTransaction(txHash: string): Promise<ethers.TransactionReceipt | null> {
-    if (!this.provider) {
-      throw new Error("Wallet not connected")
+  async validateAddress(address: string): Promise<boolean> {
+    try {
+      return ethers.isAddress(address)
+    } catch {
+      return false
     }
-
-    return await this.provider.waitForTransaction(txHash)
   }
 
-  async getTransactionReceipt(txHash: string): Promise<ethers.TransactionReceipt | null> {
-    if (!this.provider) {
-      throw new Error("Wallet not connected")
+  async validatePrivateKey(privateKey: string): Promise<boolean> {
+    try {
+      if (!privateKey.startsWith("0x")) {
+        privateKey = "0x" + privateKey
+      }
+
+      if (privateKey.length !== 66) {
+        return false
+      }
+
+      // Try to create a wallet with the private key
+      new ethers.Wallet(privateKey)
+      return true
+    } catch {
+      return false
     }
-
-    return await this.provider.getTransactionReceipt(txHash)
-  }
-
-  formatAddress(address: string): string {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`
-  }
-
-  formatBalance(balance: string, decimals = 4): string {
-    const num = Number.parseFloat(balance)
-    if (num === 0) return "0"
-    if (num < 0.0001) return "<0.0001"
-    return num.toFixed(decimals)
   }
 }
+
+export default WalletManager

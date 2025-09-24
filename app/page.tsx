@@ -1,1011 +1,555 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  AlertCircle,
-  Play,
-  Square,
-  Settings,
-  TrendingUp,
-  Zap,
-  Activity,
-  Globe,
-  Shield,
-  Target,
-  BarChart3,
-  Clock,
-  Signal,
-  Database,
-  Eye,
-  Lock,
-  Wallet,
-} from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { TradingSummaryComponent } from "@/components/trading-summary"
+import { Switch } from "@/components/ui/switch"
+import { Separator } from "@/components/ui/separator"
+import { Progress } from "@/components/ui/progress"
+import { TradingSummary, type TradingSummaryData } from "@/components/trading-summary"
 import { PortfolioDashboard } from "@/components/portfolio-dashboard"
 import { WalletConnector } from "@/components/wallet-connector"
-import { WalletManager } from "@/lib/wallet-manager"
 import {
-  type AutomatedTrader,
-  createDefaultTradingConfig,
-  type TradingSummary,
-  type TradeExecution,
-} from "@/lib/automated-trader"
-import type { RealUniswapListener, RealPoolData } from "@/lib/real-sniper-bot"
-import { TradingEngine, type TradingEngineConfig } from "@/lib/trading-engine"
-import { PortfolioTracker, type PortfolioSummary } from "@/lib/portfolio-tracker"
-import { PriceMonitor, type TokenPrice, type PriceAlert } from "@/lib/price-monitor"
-import { BASE_RPC_URLS } from "@/lib/constants"
-
-interface RealBotConfig {
-  rpcUrl: string
-  enableRealMode: boolean
-}
-
-interface PoolData {
-  token0: string
-  token1: string
-  pool: string
-  fee: number
-  timestamp: string
-  blockNumber: number
-  txHash: string
-}
+  Bot,
+  Settings,
+  Activity,
+  Wallet,
+  TrendingUp,
+  Zap,
+  AlertTriangle,
+  Play,
+  Pause,
+  RefreshCw,
+  Target,
+  DollarSign,
+  Clock,
+  BarChart3,
+} from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 interface BotConfig {
-  rpcUrl: string
-  privateKey: string
-  minLiquidity: string
-  maxGasPrice: string
-  slippage: string
+  isActive: boolean
+  targetToken: string
   buyAmount: string
-  enabled: boolean
+  slippage: string
+  gasPrice: string
+  maxGasLimit: string
+  minLiquidity: string
+  honeypotCheck: boolean
+  mevProtection: boolean
+  autoSell: boolean
+  sellPercentage: string
+  stopLoss: string
+  takeProfit: string
 }
 
-interface RealTimeStats {
+interface BotStats {
+  totalTrades: number
+  successfulTrades: number
+  totalProfit: number
+  totalLoss: number
   isRunning: boolean
-  totalPools: number
-  recentPools: number
-  connectionStatus: string
-  runtime: string
   lastActivity: string
+  gasUsed: number
+  executionTime: number
 }
 
-export default function UniswapSniperBot() {
-  const [isRunning, setIsRunning] = useState(false)
-  const [pools, setPools] = useState<PoolData[]>([])
-  const [config, setConfig] = useState<BotConfig>({
-    rpcUrl: "https://mainnet.base.org",
-    privateKey: "",
-    minLiquidity: "1000",
-    maxGasPrice: "50",
-    slippage: "5",
-    buyAmount: "0.01",
-    enabled: false,
-  })
-  const [logs, setLogs] = useState<string[]>([])
+export default function SniperBotDashboard() {
+  const { toast } = useToast()
+  const [isConnected, setIsConnected] = useState(false)
+  const [walletAddress, setWalletAddress] = useState("")
+  const [balance, setBalance] = useState("0")
+  const [isLoading, setIsLoading] = useState(false)
 
-  const [automatedTrader, setAutomatedTrader] = useState<AutomatedTrader | null>(null)
-  const [tradingConfig, setTradingConfig] = useState(createDefaultTradingConfig())
-  const [tradingSummary, setTradingSummary] = useState<TradingSummary>({
+  const [config, setConfig] = useState<BotConfig>({
+    isActive: false,
+    targetToken: "",
+    buyAmount: "0.1",
+    slippage: "12",
+    gasPrice: "20",
+    maxGasLimit: "500000",
+    minLiquidity: "10",
+    honeypotCheck: true,
+    mevProtection: true,
+    autoSell: false,
+    sellPercentage: "100",
+    stopLoss: "20",
+    takeProfit: "50",
+  })
+
+  const [stats, setStats] = useState<BotStats>({
     totalTrades: 0,
     successfulTrades: 0,
-    failedTrades: 0,
-    totalProfitLoss: 0,
-    totalGasCost: 0,
-    winRate: 0,
-    bestTrade: null,
-    worstTrade: null,
-    activePositions: 0,
-  })
-  const [recentTrades, setRecentTrades] = useState<TradeExecution[]>([])
-
-  const [realBot, setRealBot] = useState<RealUniswapListener | null>(null)
-  const [realPools, setRealPools] = useState<RealPoolData[]>([])
-  const [realConfig, setRealConfig] = useState<RealBotConfig>({
-    rpcUrl: BASE_RPC_URLS.MAINNET,
-    enableRealMode: false,
-  })
-
-  const [realTimeStats, setRealTimeStats] = useState<RealTimeStats>({
+    totalProfit: 0,
+    totalLoss: 0,
     isRunning: false,
-    totalPools: 0,
-    recentPools: 0,
-    connectionStatus: "disconnected",
-    runtime: "0h 0m",
-    lastActivity: "None",
+    lastActivity: "Never",
+    gasUsed: 0,
+    executionTime: 0,
   })
 
-  const [tradingEngine, setTradingEngine] = useState<TradingEngine | null>(null)
-  const [portfolioTracker] = useState(new PortfolioTracker())
-  const [priceMonitor, setPriceMonitor] = useState<PriceMonitor | null>(null)
-  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary>({
-    totalInvested: 0,
-    currentValue: 0,
-    totalPnL: 0,
-    totalPnLPercentage: 0,
-    dayChange: 0,
-    dayChangePercentage: 0,
-    positions: [],
-    topGainer: null,
-    topLoser: null,
-  })
-  const [tokenPrices, setTokenPrices] = useState<TokenPrice[]>([])
-  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>([])
-  const [walletManager] = useState(new WalletManager())
-  const [walletConnection, setWalletConnection] = useState<any>(null)
-
-  const addLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString()
-    setLogs((prev) => [`[${timestamp}] ${message}`, ...prev.slice(0, 99)])
+  // Mock trading summary data
+  const tradingSummaryData: TradingSummaryData = {
+    totalTrades: stats.totalTrades,
+    successfulTrades: stats.successfulTrades,
+    failedTrades: stats.totalTrades - stats.successfulTrades,
+    totalVolume: stats.totalProfit + stats.totalLoss,
+    totalProfit: stats.totalProfit,
+    totalLoss: stats.totalLoss,
+    averageGasUsed: stats.gasUsed,
+    averageExecutionTime: stats.executionTime,
+    successRate: stats.totalTrades > 0 ? (stats.successfulTrades / stats.totalTrades) * 100 : 0,
+    profitFactor: stats.totalLoss > 0 ? stats.totalProfit / stats.totalLoss : stats.totalProfit > 0 ? 2.0 : 0,
+    largestWin: stats.totalProfit * 0.3,
+    largestLoss: stats.totalLoss * 0.4,
+    activePositions: 2,
+    pendingOrders: 1,
   }
 
-  const startBot = async () => {
-    if (!walletConnection && !realConfig.enableRealMode) {
-      addLog("❌ Wallet connection required. Please connect your wallet first.")
+  const handleConfigChange = (key: keyof BotConfig, value: string | boolean) => {
+    setConfig((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const handleStartBot = async () => {
+    if (!isConnected) {
+      toast({
+        title: "Wallet Not Connected",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      })
       return
     }
 
-    setIsRunning(true)
+    if (!config.targetToken) {
+      toast({
+        title: "Missing Configuration",
+        description: "Please enter a target token address",
+        variant: "destructive",
+      })
+      return
+    }
 
+    setIsLoading(true)
     try {
-      // Create trading engine configuration
-      const engineConfig: TradingEngineConfig = {
-        ...tradingConfig,
-        rpcUrl: realConfig.enableRealMode ? realConfig.rpcUrl : config.rpcUrl,
-        privateKey: walletConnection?.type === "private-key" ? config.privateKey : "",
-        enableRealMode: realConfig.enableRealMode,
-      }
+      // Simulate bot start
+      await new Promise((resolve) => setTimeout(resolve, 2000))
 
-      // Initialize trading engine
-      const engine = new TradingEngine(engineConfig, {
-        onLog: addLog,
-        onPoolDetected: (pool) => {
-          if (realConfig.enableRealMode) {
-            setRealPools((prev) => [pool, ...prev.slice(0, 49)])
-          }
-          const token0Symbol = pool.token0Info?.symbol || pool.token0.slice(0, 6)
-          const token1Symbol = pool.token1Info?.symbol || pool.token1.slice(0, 6)
-          addLog(`🎯 Pool: ${token0Symbol}/${token1Symbol} | Fee: ${pool.fee / 10000}%`)
-        },
-        onTradeExecuted: (trade) => {
-          setRecentTrades((prev) => [trade, ...prev.slice(0, 19)])
+      setConfig((prev) => ({ ...prev, isActive: true }))
+      setStats((prev) => ({ ...prev, isRunning: true, lastActivity: new Date().toLocaleString() }))
 
-          // Update portfolio
-          portfolioTracker.addTrade(
-            trade.tokenAddress,
-            trade.tokenSymbol,
-            Number.parseFloat(trade.amountOut),
-            Number.parseFloat(trade.amountIn) / Number.parseFloat(trade.amountOut),
-            trade.type,
-          )
-
-          // Update summary
-          setPortfolioSummary(portfolioTracker.getPortfolioSummary())
-
-          addLog(`✅ Trade executed: ${trade.type} ${trade.tokenSymbol}`)
-        },
+      toast({
+        title: "Bot Started",
+        description: "Sniper bot is now active and monitoring for opportunities",
       })
-
-      setTradingEngine(engine)
-      await engine.start()
-
-      // Initialize price monitor
-      const monitor = new PriceMonitor(new (await import("ethers")).ethers.JsonRpcProvider(engineConfig.rpcUrl), {
-        onPriceUpdate: (price) => {
-          setTokenPrices((prev) => {
-            const updated = prev.filter((p) => p.address !== price.address)
-            return [price, ...updated]
-          })
-
-          // Update portfolio with new price
-          portfolioTracker.updatePrice(price.address, price.priceUSD)
-          setPortfolioSummary(portfolioTracker.getPortfolioSummary())
-        },
-        onAlert: (alert) => {
-          setPriceAlerts((prev) => [alert, ...prev])
-          addLog(`🚨 Price Alert: ${alert.type} triggered for ${alert.tokenAddress}`)
-        },
-      })
-
-      setPriceMonitor(monitor)
-
-      // Update trading summary periodically
-      const summaryInterval = setInterval(() => {
-        if (engine.isEngineRunning()) {
-          const summary = engine.getTradingSummary()
-          setTradingSummary(summary)
-          setRecentTrades(engine.getAllTrades().slice(0, 20))
-        }
-      }, 5000)
-      ;(window as any).summaryInterval = summaryInterval
     } catch (error) {
-      addLog(`❌ Failed to start trading engine: ${error}`)
-      setIsRunning(false)
+      toast({
+        title: "Error",
+        description: "Failed to start bot. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const stopBot = async () => {
-    setIsRunning(false)
-
-    if ((window as any).summaryInterval) {
-      clearInterval((window as any).summaryInterval)
-    }
-
-    if (tradingEngine) {
-      await tradingEngine.stop()
-      setTradingEngine(null)
-    }
-
-    if (priceMonitor) {
-      priceMonitor.stopMonitoring()
-      setPriceMonitor(null)
-    }
-
-    addLog("⏹️ All systems stopped")
-  }
-
-  const handleWalletConnect = async (connection: {
-    type: "metamask" | "private-key"
-    address: string
-    signer?: any
-  }) => {
+  const handleStopBot = async () => {
+    setIsLoading(true)
     try {
-      let walletConn
+      // Simulate bot stop
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      if (connection.type === "metamask") {
-        // MetaMask connection is already handled by the enhanced MetaMask class
-        walletConn = {
-          type: "metamask",
-          address: connection.address,
-          signer: connection.signer,
-        }
-        addLog(`✅ MetaMask connected: ${connection.address}`)
-      } else if (connection.type === "private-key") {
-        // Connect with private key
-        walletConn = await walletManager.connectPrivateKey(config.privateKey, config.rpcUrl)
-        addLog(`✅ Private key wallet connected: ${walletConn.address}`)
-      }
+      setConfig((prev) => ({ ...prev, isActive: false }))
+      setStats((prev) => ({ ...prev, isRunning: false }))
 
-      setWalletConnection(walletConn)
-    } catch (error: any) {
-      addLog(`❌ Wallet connection failed: ${error.message}`)
-      throw error
+      toast({
+        title: "Bot Stopped",
+        description: "Sniper bot has been deactivated",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to stop bot. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    return () => {
-      if ((window as any).botInterval) {
-        clearInterval((window as any).botInterval)
-      }
-      if ((window as any).statsInterval) {
-        clearInterval((window as any).statsInterval)
-      }
-      if ((window as any).summaryInterval) {
-        clearInterval((window as any).summaryInterval)
-      }
-    }
-  }, [])
-
-  const safeToLocaleString = (value: number | undefined | null): string => {
-    if (value === undefined || value === null || isNaN(value)) {
-      return "0"
-    }
-    return value.toLocaleString()
+  const handleRefreshStats = () => {
+    // Simulate stats refresh with random data
+    setStats((prev) => ({
+      ...prev,
+      totalTrades: Math.floor(Math.random() * 50) + prev.totalTrades,
+      successfulTrades: Math.floor(Math.random() * 30) + prev.successfulTrades,
+      totalProfit: Math.random() * 1000 + prev.totalProfit,
+      totalLoss: Math.random() * 200 + prev.totalLoss,
+      gasUsed: Math.floor(Math.random() * 100000) + 200000,
+      executionTime: Math.random() * 5 + 1,
+      lastActivity: new Date().toLocaleString(),
+    }))
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
-      <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20" />
-        <div className="relative max-w-7xl mx-auto px-4 py-12">
-          <div className="text-center space-y-6">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl shadow-2xl">
-                <Zap className="h-8 w-8 text-white" />
-              </div>
-              <h1 className="text-5xl font-bold bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent">
-                UniSwap Sniper Pro
-              </h1>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Bot className="h-6 w-6 text-primary" />
             </div>
-            <p className="text-xl text-blue-100 max-w-2xl mx-auto leading-relaxed">
-              Professional-grade DeFi trading infrastructure for Base Chain. Real-time pool detection with
-              institutional-level precision.
-            </p>
-            <div className="flex items-center justify-center gap-6 text-sm text-blue-200">
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                <span>Enterprise Security</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Signal className="h-4 w-4" />
-                <span>Real-time Data</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                <span>Precision Trading</span>
-              </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Uniswap Sniper Bot</h1>
+              <p className="text-muted-foreground">Advanced MEV-protected trading automation</p>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 pb-12 -mt-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-400 mb-1">System Status</p>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`w-3 h-3 rounded-full shadow-lg ${
-                        realConfig.enableRealMode
-                          ? realTimeStats.connectionStatus === "connected"
-                            ? "bg-emerald-500 shadow-emerald-500/50"
-                            : "bg-red-500 shadow-red-500/50"
-                          : isRunning
-                            ? "bg-emerald-500 shadow-emerald-500/50"
-                            : "bg-slate-500"
-                      }`}
-                    />
-                    <span className="font-semibold text-white">
-                      {realConfig.enableRealMode
-                        ? realTimeStats.connectionStatus.charAt(0).toUpperCase() +
-                          realTimeStats.connectionStatus.slice(1)
-                        : isRunning
-                          ? "Active"
-                          : "Standby"}
-                    </span>
-                  </div>
-                </div>
-                <Activity className="h-8 w-8 text-blue-400" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-400 mb-1">Pools Detected</p>
-                  <p className="text-2xl font-bold text-white">
-                    {realConfig.enableRealMode
-                      ? safeToLocaleString(realTimeStats.totalPools)
-                      : safeToLocaleString(pools.length)}
-                  </p>
-                  <p className="text-xs text-emerald-400">
-                    +{realConfig.enableRealMode ? safeToLocaleString(realTimeStats.recentPools) : "0"} recent
-                  </p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-emerald-400" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-400 mb-1">Network</p>
-                  <p className="text-lg font-semibold text-white">Base Mainnet</p>
-                  <p className="text-xs text-blue-400">Uniswap V3</p>
-                </div>
-                <Globe className="h-8 w-8 text-blue-400" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-400 mb-1">Runtime</p>
-                  <p className="text-lg font-semibold text-white">
-                    {realConfig.enableRealMode ? realTimeStats.runtime : "0h 0m"}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    {realConfig.enableRealMode ? realTimeStats.lastActivity : "Inactive"}
-                  </p>
-                </div>
-                <Clock className="h-8 w-8 text-purple-400" />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex items-center gap-2">
+            <Badge variant={config.isActive ? "default" : "secondary"} className="px-3 py-1">
+              {config.isActive ? (
+                <>
+                  <Zap className="h-3 w-3 mr-1" />
+                  Active
+                </>
+              ) : (
+                <>
+                  <Pause className="h-3 w-3 mr-1" />
+                  Inactive
+                </>
+              )}
+            </Badge>
+            {isConnected && (
+              <Badge variant="outline" className="px-3 py-1">
+                <Wallet className="h-3 w-3 mr-1" />
+                Connected
+              </Badge>
+            )}
+          </div>
         </div>
 
-        <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 bg-slate-800 border-slate-700 p-1">
-            <TabsTrigger value="dashboard" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+        {/* Wallet Connection */}
+        <WalletConnector
+          isConnected={isConnected}
+          walletAddress={walletAddress}
+          balance={balance}
+          onConnect={(address, bal) => {
+            setIsConnected(true)
+            setWalletAddress(address)
+            setBalance(bal)
+          }}
+          onDisconnect={() => {
+            setIsConnected(false)
+            setWalletAddress("")
+            setBalance("0")
+          }}
+        />
+
+        {/* Quick Stats */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Trades</CardTitle>
+              <Target className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalTrades}</div>
+              <p className="text-xs text-muted-foreground">{stats.successfulTrades} successful</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div
+                className={`text-2xl font-bold ${(stats.totalProfit - stats.totalLoss) >= 0 ? "text-green-600" : "text-red-600"}`}
+              >
+                ${(stats.totalProfit - stats.totalLoss).toFixed(2)}
+              </div>
+              <p className="text-xs text-muted-foreground">Total P&L</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats.totalTrades > 0 ? ((stats.successfulTrades / stats.totalTrades) * 100).toFixed(1) : 0}%
+              </div>
+              <Progress
+                value={stats.totalTrades > 0 ? (stats.successfulTrades / stats.totalTrades) * 100 : 0}
+                className="mt-2"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Last Activity</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm font-medium">{stats.lastActivity}</div>
+              <p className="text-xs text-muted-foreground">Status: {stats.isRunning ? "Running" : "Stopped"}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Content */}
+        <Tabs defaultValue="dashboard" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="dashboard">
               <BarChart3 className="h-4 w-4 mr-2" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="config" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+            <TabsTrigger value="config">
               <Settings className="h-4 w-4 mr-2" />
               Configuration
             </TabsTrigger>
-            <TabsTrigger value="pools" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
-              <Database className="h-4 w-4 mr-2" />
-              Live Pools
-            </TabsTrigger>
-            <TabsTrigger value="logs" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
-              <Eye className="h-4 w-4 mr-2" />
-              System Logs
-            </TabsTrigger>
-            <TabsTrigger value="automation" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
-              <Zap className="h-4 w-4 mr-2" />
-              Automation
-            </TabsTrigger>
-            <TabsTrigger value="portfolio" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+            <TabsTrigger value="portfolio">
               <Wallet className="h-4 w-4 mr-2" />
               Portfolio
             </TabsTrigger>
+            <TabsTrigger value="activity">
+              <Activity className="h-4 w-4 mr-2" />
+              Activity
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dashboard" className="space-y-6">
-            <WalletConnector
-              onConnect={handleWalletConnect}
-              isConnected={!!walletConnection}
-              walletAddress={walletConnection?.address}
-              walletType={walletConnection?.type}
-            />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Target className="h-5 w-5 text-blue-400" />
-                    Trading Control Center
-                  </CardTitle>
-                  <CardDescription className="text-slate-400">
-                    Professional-grade bot management and execution
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex gap-3">
-                    <Button
-                      onClick={startBot}
-                      disabled={isRunning}
-                      className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg"
-                    >
-                      <Play className="h-4 w-4 mr-2" />
-                      Initialize System
-                    </Button>
-                    <Button
-                      onClick={stopBot}
-                      disabled={!isRunning}
-                      variant="outline"
-                      className="flex-1 border-red-600 text-red-400 hover:bg-red-600 hover:text-white bg-transparent"
-                    >
-                      <Square className="h-4 w-4 mr-2" />
-                      Emergency Stop
-                    </Button>
-                  </div>
-
-                  <Alert className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-700">
-                    <Shield className="h-4 w-4" />
-                    <AlertDescription className="text-blue-200">
-                      <strong>Enterprise Notice:</strong> This system operates with institutional-grade security
-                      protocols. All operations are logged and monitored for compliance.
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-700">
-                    <div className="text-center p-3 bg-slate-800/50 rounded-lg">
-                      <p className="text-2xl font-bold text-emerald-400">
-                        {realConfig.enableRealMode
-                          ? safeToLocaleString(realTimeStats.totalPools)
-                          : safeToLocaleString(pools.length)}
-                      </p>
-                      <p className="text-xs text-slate-400">Total Detected</p>
-                    </div>
-                    <div className="text-center p-3 bg-slate-800/50 rounded-lg">
-                      <p className="text-2xl font-bold text-blue-400">
-                        {realConfig.enableRealMode ? safeToLocaleString(realTimeStats.recentPools) : "0"}
-                      </p>
-                      <p className="text-xs text-slate-400">Recent Activity</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-emerald-400" />
-                    Real-time Activity Monitor
-                  </CardTitle>
-                  <CardDescription className="text-slate-400">
-                    Live system events and blockchain interactions
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
-                    {logs.slice(0, 15).map((log, index) => (
-                      <div
-                        key={index}
-                        className="text-sm font-mono bg-slate-900/50 p-3 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors"
-                      >
-                        <span className="text-slate-300">{log}</span>
-                      </div>
-                    ))}
-                    {logs.length === 0 && (
-                      <div className="text-center py-12">
-                        <div className="mb-6">
-                          <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                            {realConfig.enableRealMode ? (
-                              <Signal className="h-8 w-8 text-white" />
-                            ) : (
-                              <Database className="h-8 w-8 text-white" />
-                            )}
-                          </div>
-                        </div>
-                        <h3 className="text-xl font-semibold text-white mb-2">
-                          {realConfig.enableRealMode ? "Monitoring Live Base Chain" : "System Ready"}
-                        </h3>
-                        <p className="text-slate-400 mb-4">
-                          {realConfig.enableRealMode
-                            ? "Scanning for new Uniswap V3 pool deployments..."
-                            : "Initialize the system to begin pool detection"}
-                        </p>
-                        {realConfig.enableRealMode && (
-                          <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
-                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                            <span>Last activity: {realTimeStats.lastActivity}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+          <TabsContent value="dashboard" className="space-y-4">
+            <TradingSummary data={tradingSummaryData} isLoading={isLoading} onRefresh={handleRefreshStats} />
           </TabsContent>
 
-          <TabsContent value="config" className="space-y-6">
-            <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Settings className="h-5 w-5 text-blue-400" />
-                  System Configuration
-                </CardTitle>
-                <CardDescription className="text-slate-400">
-                  Configure advanced trading parameters and security settings
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="rpc" className="text-slate-300 font-medium">
-                      RPC Endpoint
-                    </Label>
-                    <Input
-                      id="rpc"
-                      value={config.rpcUrl}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, rpcUrl: e.target.value }))}
-                      placeholder="https://mainnet.base.org"
-                      className="bg-slate-900 border-slate-600 text-white"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="gas" className="text-slate-300 font-medium">
-                      Max Gas Price (USD)
-                    </Label>
-                    <Input
-                      id="gas"
-                      value={config.maxGasPrice}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, maxGasPrice: e.target.value }))}
-                      placeholder="5.00"
-                      className="bg-slate-900 border-slate-600 text-white"
-                    />
-                    <p className="text-xs text-slate-400">Maximum USD to spend on gas per transaction</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="liquidity" className="text-slate-300 font-medium">
-                      Min Liquidity (USD)
-                    </Label>
-                    <Input
-                      id="liquidity"
-                      value={config.minLiquidity}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, minLiquidity: e.target.value }))}
-                      placeholder="1000"
-                      className="bg-slate-900 border-slate-600 text-white"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="slippage" className="text-slate-300 font-medium">
-                      Slippage Tolerance (%)
-                    </Label>
-                    <Input
-                      id="slippage"
-                      value={config.slippage}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, slippage: e.target.value }))}
-                      placeholder="5"
-                      className="bg-slate-900 border-slate-600 text-white"
-                    />
-                    <p className="text-xs text-slate-400">Maximum price difference accepted during trade execution</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="amount" className="text-slate-300 font-medium">
-                      Position Size (ETH)
-                    </Label>
-                    <Input
-                      id="amount"
-                      value={config.buyAmount}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, buyAmount: e.target.value }))}
-                      placeholder="0.01"
-                      className="bg-slate-900 border-slate-600 text-white"
-                    />
-                  </div>
-                  <div className="flex items-center space-x-3 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
-                    <Switch
-                      id="enabled"
-                      checked={config.enabled}
-                      onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, enabled: checked }))}
-                    />
-                    <Label htmlFor="enabled" className="text-slate-300 font-medium">
-                      Auto-execution Enabled
-                    </Label>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="private-key" className="text-slate-300 font-medium flex items-center gap-2">
-                    <Lock className="h-4 w-4" />
-                    Private Key (Encrypted Storage)
-                  </Label>
-                  <Input
-                    id="private-key"
-                    type="password"
-                    value={config.privateKey}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, privateKey: e.target.value }))}
-                    placeholder="Your private key (AES-256 encrypted)"
-                    className="bg-slate-900 border-slate-600 text-white"
-                  />
-                </div>
-
-                <div className="border-t border-slate-700 pt-6">
-                  <div className="flex items-center space-x-3 mb-6 p-4 bg-gradient-to-r from-orange-900/30 to-red-900/30 rounded-lg border border-orange-700">
-                    <Switch
-                      id="real-mode"
-                      checked={realConfig.enableRealMode}
-                      onCheckedChange={(checked) => setRealConfig((prev) => ({ ...prev, enableRealMode: checked }))}
-                    />
-                    <Label htmlFor="real-mode" className="font-semibold text-orange-300 flex items-center gap-2">
-                      <Signal className="h-4 w-4" />🔴 LIVE MODE - Real Base Chain Connection
-                    </Label>
-                  </div>
-
-                  {realConfig.enableRealMode && (
-                    <div className="space-y-4 p-6 bg-gradient-to-r from-orange-900/20 to-red-900/20 rounded-lg border border-orange-700">
-                      <Alert className="bg-orange-900/30 border-orange-600">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription className="text-orange-200">
-                          <strong>LIVE MODE ACTIVATED:</strong> System will connect to Base mainnet blockchain.
-                          Real-time pool detection active. No trading execution - monitoring only.
-                        </AlertDescription>
-                      </Alert>
-
-                      <div className="space-y-2">
-                        <Label className="text-slate-300">Base Chain RPC URL</Label>
-                        <Input
-                          id="rpc-url"
-                          value={realConfig.rpcUrl}
-                          onChange={(e) => setRealConfig((prev) => ({ ...prev, rpcUrl: e.target.value }))}
-                          placeholder="https://mainnet.base.org"
-                          className="bg-slate-900 border-slate-600 text-white"
-                        />
-                        <p className="text-xs text-slate-400">
-                          Enterprise: Use Alchemy/Infura for optimal performance | Free: https://mainnet.base.org
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="pools" className="space-y-6">
-            <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Database className="h-5 w-5 text-emerald-400" />
-                  Live Pool Detection System
-                </CardTitle>
-                <CardDescription className="text-slate-400">
-                  Real-time Uniswap V3 pool discovery and analysis
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {(() => {
-                    const displayPools = realConfig.enableRealMode ? realPools : pools
-
-                    return displayPools.length > 0 ? (
-                      displayPools.map((pool, index) => (
-                        <div
-                          key={`${pool.poolAddress || pool.pool}-${index}`}
-                          className="bg-gradient-to-r from-slate-900/50 to-slate-800/50 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition-all duration-300 hover:shadow-xl"
-                        >
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                              <Badge
-                                variant="outline"
-                                className={`px-3 py-1 font-semibold ${
-                                  realConfig.enableRealMode
-                                    ? "bg-gradient-to-r from-emerald-900 to-emerald-800 text-emerald-300 border-emerald-600"
-                                    : "bg-gradient-to-r from-blue-900 to-blue-800 text-blue-300 border-blue-600"
-                                }`}
-                              >
-                                {realConfig.enableRealMode ? "🔴 LIVE" : "DEMO"} #{displayPools.length - index}
-                              </Badge>
-                              <Badge
-                                variant={pool.fee === 3000 ? "default" : "secondary"}
-                                className="bg-gradient-to-r from-purple-900 to-purple-800 text-purple-300"
-                              >
-                                {pool.fee / 10000}% Fee Tier
-                              </Badge>
-                            </div>
-                            <div className="text-xs text-slate-400 font-mono">
-                              {new Date(pool.timestamp).toLocaleTimeString()}
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            {realConfig.enableRealMode ? (
-                              <>
-                                <div className="space-y-1">
-                                  <span className="text-blue-400 font-medium">Token A:</span>
-                                  <div className="font-mono text-white bg-slate-900/50 p-2 rounded">
-                                    {(pool as RealPoolData).token0Info?.symbol ||
-                                      `${(pool as RealPoolData).token0.slice(0, 8)}...`}
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="text-emerald-400 font-medium">Token B:</span>
-                                  <div className="font-mono text-white bg-slate-900/50 p-2 rounded">
-                                    {(pool as RealPoolData).token1Info?.symbol ||
-                                      `${(pool as RealPoolData).token1.slice(0, 8)}...`}
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="text-purple-400 font-medium">Pool Address:</span>
-                                  <div className="font-mono text-xs text-slate-300 bg-slate-900/50 p-2 rounded">
-                                    {(pool as RealPoolData).poolAddress}
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="text-yellow-400 font-medium">Block Height:</span>
-                                  <div className="font-mono text-white bg-slate-900/50 p-2 rounded">
-                                    #{safeToLocaleString(pool.blockNumber)}
-                                  </div>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="space-y-1">
-                                  <span className="text-blue-400 font-medium">Token A:</span>
-                                  <div className="font-mono text-white bg-slate-900/50 p-2 rounded">
-                                    {(pool as PoolData).token0.slice(0, 10)}...
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="text-emerald-400 font-medium">Token B:</span>
-                                  <div className="font-mono text-white bg-slate-900/50 p-2 rounded">
-                                    {(pool as PoolData).token1.slice(0, 10)}...
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="text-purple-400 font-medium">Pool Address:</span>
-                                  <div className="font-mono text-xs text-slate-300 bg-slate-900/50 p-2 rounded">
-                                    {(pool as PoolData).pool}
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="text-yellow-400 font-medium">Block Height:</span>
-                                  <div className="font-mono text-white bg-slate-900/50 p-2 rounded">
-                                    #{safeToLocaleString(pool.blockNumber)}
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                          </div>
-
-                          {realConfig.enableRealMode && (
-                            <div className="pt-4 mt-4 border-t border-slate-700">
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-slate-400 font-mono">
-                                  TX: {(pool as RealPoolData).transactionHash.slice(0, 16)}...
-                                </span>
-                                <span className="text-emerald-400 font-medium">
-                                  {Math.floor((Date.now() - new Date(pool.timestamp).getTime()) / 1000)}s ago
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-16">
-                        <div className="mb-6">
-                          <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                            {realConfig.enableRealMode ? (
-                              <Signal className="h-8 w-8 text-white" />
-                            ) : (
-                              <Database className="h-8 w-8 text-white" />
-                            )}
-                          </div>
-                        </div>
-                        <h3 className="text-xl font-semibold text-white mb-2">
-                          {realConfig.enableRealMode ? "Monitoring Live Base Chain" : "System Ready"}
-                        </h3>
-                        <p className="text-slate-400 mb-4">
-                          {realConfig.enableRealMode
-                            ? "Scanning for new Uniswap V3 pool deployments..."
-                            : "Initialize the system to begin pool detection"}
-                        </p>
-                        {realConfig.enableRealMode && (
-                          <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
-                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                            <span>Last activity: {realTimeStats.lastActivity}</span>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })()}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="logs" className="space-y-6">
-            <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Eye className="h-5 w-5 text-blue-400" />
-                  System Event Logs
-                </CardTitle>
-                <CardDescription className="text-slate-400">
-                  Comprehensive system monitoring and audit trail
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  className="min-h-96 font-mono text-sm bg-slate-900 border-slate-600 text-slate-300 resize-none"
-                  value={logs.join("\n")}
-                  readOnly
-                  placeholder="System logs and events will appear here when the bot is active..."
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="automation" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 shadow-2xl">
+          <TabsContent value="config" className="space-y-4">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Trading Configuration */}
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-yellow-400" />
-                    Automated Trading Settings
-                  </CardTitle>
-                  <CardDescription className="text-slate-400">Configure intelligent trading automation</CardDescription>
+                  <CardTitle>Trading Settings</CardTitle>
+                  <CardDescription>Configure your trading parameters</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center space-x-3 p-4 bg-gradient-to-r from-yellow-900/30 to-orange-900/30 rounded-lg border border-yellow-700">
-                    <Switch
-                      id="auto-trading"
-                      checked={tradingConfig.enabled}
-                      onCheckedChange={(checked) => setTradingConfig((prev) => ({ ...prev, enabled: checked }))}
+                  <div className="space-y-2">
+                    <Label htmlFor="targetToken">Target Token Address</Label>
+                    <Input
+                      id="targetToken"
+                      placeholder="0x..."
+                      value={config.targetToken}
+                      onChange={(e) => handleConfigChange("targetToken", e.target.value)}
                     />
-                    <Label htmlFor="auto-trading" className="font-semibold text-yellow-300 flex items-center gap-2">
-                      <Zap className="h-4 w-4" />🤖 Enable Automated Trading
-                    </Label>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-slate-300">Max Position Size (ETH)</Label>
+                      <Label htmlFor="buyAmount">Buy Amount (ETH)</Label>
                       <Input
-                        value={tradingConfig.maxPositionSizeETH}
-                        onChange={(e) =>
-                          setTradingConfig((prev) => ({
-                            ...prev,
-                            maxPositionSizeETH: Number.parseFloat(e.target.value) || 0,
-                          }))
-                        }
-                        placeholder="0.01"
-                        className="bg-slate-900 border-slate-600 text-white"
+                        id="buyAmount"
+                        type="number"
+                        step="0.01"
+                        value={config.buyAmount}
+                        onChange={(e) => handleConfigChange("buyAmount", e.target.value)}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-slate-300">Max Gas Price (USD)</Label>
+                      <Label htmlFor="slippage">Slippage (%)</Label>
                       <Input
-                        value={tradingConfig.maxGasPriceUSD}
-                        onChange={(e) =>
-                          setTradingConfig((prev) => ({
-                            ...prev,
-                            maxGasPriceUSD: Number.parseFloat(e.target.value) || 0,
-                          }))
-                        }
-                        placeholder="5.00"
-                        className="bg-slate-900 border-slate-600 text-white"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-slate-300">Min Confidence (%)</Label>
-                      <Input
-                        value={tradingConfig.minConfidenceScore}
-                        onChange={(e) =>
-                          setTradingConfig((prev) => ({
-                            ...prev,
-                            minConfidenceScore: Number.parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        placeholder="70"
-                        className="bg-slate-900 border-slate-600 text-white"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-slate-300">Max Risk Score</Label>
-                      <Input
-                        value={tradingConfig.maxRiskScore}
-                        onChange={(e) =>
-                          setTradingConfig((prev) => ({
-                            ...prev,
-                            maxRiskScore: Number.parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        placeholder="40"
-                        className="bg-slate-900 border-slate-600 text-white"
+                        id="slippage"
+                        type="number"
+                        value={config.slippage}
+                        onChange={(e) => handleConfigChange("slippage", e.target.value)}
                       />
                     </div>
                   </div>
 
-                  <Alert className="bg-gradient-to-r from-red-900/50 to-orange-900/50 border-red-700">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-red-200">
-                      <strong>HIGH RISK:</strong> Automated trading can result in significant losses. Only use funds you
-                      can afford to lose.
-                    </AlertDescription>
-                  </Alert>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="gasPrice">Gas Price (Gwei)</Label>
+                      <Input
+                        id="gasPrice"
+                        type="number"
+                        value={config.gasPrice}
+                        onChange={(e) => handleConfigChange("gasPrice", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="maxGasLimit">Max Gas Limit</Label>
+                      <Input
+                        id="maxGasLimit"
+                        type="number"
+                        value={config.maxGasLimit}
+                        onChange={(e) => handleConfigChange("maxGasLimit", e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
-              <TradingSummaryComponent summary={tradingSummary} recentTrades={recentTrades} />
+              {/* Security & Protection */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Security & Protection</CardTitle>
+                  <CardDescription>Enable safety features</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Honeypot Detection</Label>
+                      <p className="text-sm text-muted-foreground">Automatically detect and avoid honeypot tokens</p>
+                    </div>
+                    <Switch
+                      checked={config.honeypotCheck}
+                      onCheckedChange={(checked) => handleConfigChange("honeypotCheck", checked)}
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>MEV Protection</Label>
+                      <p className="text-sm text-muted-foreground">Protect against MEV attacks and front-running</p>
+                    </div>
+                    <Switch
+                      checked={config.mevProtection}
+                      onCheckedChange={(checked) => handleConfigChange("mevProtection", checked)}
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="minLiquidity">Minimum Liquidity (ETH)</Label>
+                    <Input
+                      id="minLiquidity"
+                      type="number"
+                      step="0.1"
+                      value={config.minLiquidity}
+                      onChange={(e) => handleConfigChange("minLiquidity", e.target.value)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Auto-Sell Configuration */}
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle>Auto-Sell Settings</CardTitle>
+                  <CardDescription>Configure automatic selling parameters</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Enable Auto-Sell</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Automatically sell tokens based on profit/loss thresholds
+                      </p>
+                    </div>
+                    <Switch
+                      checked={config.autoSell}
+                      onCheckedChange={(checked) => handleConfigChange("autoSell", checked)}
+                    />
+                  </div>
+
+                  {config.autoSell && (
+                    <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                      <div className="space-y-2">
+                        <Label htmlFor="sellPercentage">Sell Percentage (%)</Label>
+                        <Input
+                          id="sellPercentage"
+                          type="number"
+                          value={config.sellPercentage}
+                          onChange={(e) => handleConfigChange("sellPercentage", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="stopLoss">Stop Loss (%)</Label>
+                        <Input
+                          id="stopLoss"
+                          type="number"
+                          value={config.stopLoss}
+                          onChange={(e) => handleConfigChange("stopLoss", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="takeProfit">Take Profit (%)</Label>
+                        <Input
+                          id="takeProfit"
+                          type="number"
+                          value={config.takeProfit}
+                          onChange={(e) => handleConfigChange("takeProfit", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
+
+            {/* Control Buttons */}
+            <div className="flex items-center gap-4">
+              {!config.isActive ? (
+                <Button
+                  onClick={handleStartBot}
+                  disabled={isLoading || !isConnected}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {isLoading ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
+                  Start Bot
+                </Button>
+              ) : (
+                <Button onClick={handleStopBot} disabled={isLoading} variant="destructive">
+                  {isLoading ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Pause className="h-4 w-4 mr-2" />}
+                  Stop Bot
+                </Button>
+              )}
+
+              <Button variant="outline" onClick={handleRefreshStats}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Stats
+              </Button>
+            </div>
+
+            {!isConnected && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Please connect your wallet to start trading. The bot requires wallet access to execute transactions.
+                </AlertDescription>
+              </Alert>
+            )}
           </TabsContent>
 
-          <TabsContent value="portfolio" className="space-y-6">
-            <PortfolioDashboard summary={portfolioSummary} />
+          <TabsContent value="portfolio" className="space-y-4">
+            <PortfolioDashboard />
+          </TabsContent>
+
+          <TabsContent value="activity" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Activity</CardTitle>
+                <CardDescription>Latest bot actions and transactions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8 text-muted-foreground">
+                  <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No recent activity</p>
+                  <p className="text-sm">Start the bot to see trading activity here</p>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
-
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #1e293b;
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #475569;
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #64748b;
-        }
-      `}</style>
     </div>
   )
 }

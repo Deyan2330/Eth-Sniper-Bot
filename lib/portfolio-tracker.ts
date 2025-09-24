@@ -1,200 +1,188 @@
-import type { ethers } from "ethers"
+import { ethers } from "ethers"
 
 export interface Position {
   tokenAddress: string
-  symbol: string
-  name: string
+  tokenSymbol: string
+  tokenName: string
   balance: string
-  decimals: number
-  price: number
-  value: number
-  costBasis: number
-  unrealizedPnL: number
-  unrealizedPnLPercentage: number
+  balanceUSD: number
   averageBuyPrice: number
-  totalBought: string
-  totalSold: string
-  firstBuyDate: number
-  lastTradeDate: number
+  currentPrice: number
+  totalInvested: number
+  unrealizedPnL: number
+  unrealizedPnLPercent: number
+  firstBoughtAt: number
+  lastUpdated: number
 }
 
 export interface Transaction {
-  id: string
   hash: string
-  type: "buy" | "sell"
+  type: "buy" | "sell" | "transfer_in" | "transfer_out"
   tokenAddress: string
-  symbol: string
+  tokenSymbol: string
   amount: string
-  price: number
-  value: number
+  pricePerToken: number
+  totalValue: number
   gasUsed: string
-  gasPrice: string
+  gasPriceGwei: string
+  gasFeesETH: string
+  gasFeesUSD: number
   timestamp: number
   blockNumber: number
+  from: string
+  to: string
 }
 
 export interface PortfolioSummary {
-  totalValue: number
-  totalCostBasis: number
+  totalValueUSD: number
+  totalInvestedUSD: number
   totalUnrealizedPnL: number
-  totalUnrealizedPnLPercentage: number
-  totalPositions: number
-  topGainer: Position | null
-  topLoser: Position | null
-  dayChange: number
-  dayChangePercentage: number
+  totalUnrealizedPnLPercent: number
+  totalRealizedPnL: number
+  totalGasFeesUSD: number
+  positionCount: number
+  transactionCount: number
+  lastUpdated: number
 }
 
 export class PortfolioTracker {
   private provider: ethers.Provider
-  private walletAddress: string
   private positions: Map<string, Position> = new Map()
   private transactions: Transaction[] = []
-  private isTracking = false
+  private walletAddress: string | null = null
 
-  constructor(provider: ethers.Provider, walletAddress: string) {
+  constructor(provider: ethers.Provider) {
     this.provider = provider
-    this.walletAddress = walletAddress.toLowerCase()
   }
 
-  async startTracking(): Promise<void> {
-    if (this.isTracking) {
-      console.log("Portfolio tracking is already active")
-      return
+  setWalletAddress(address: string): void {
+    this.walletAddress = address
+    this.positions.clear()
+    this.transactions = []
+  }
+
+  async addTransaction(transaction: Transaction): Promise<void> {
+    if (!this.walletAddress) {
+      throw new Error("Wallet address not set")
     }
 
-    this.isTracking = true
-    console.log(`Starting portfolio tracking for wallet: ${this.walletAddress}`)
+    // Add to transactions list
+    this.transactions.push(transaction)
 
-    try {
-      await this.loadTransactionHistory()
-      await this.updatePositions()
-      console.log("Portfolio tracking initialized successfully")
-    } catch (error) {
-      console.error("Error starting portfolio tracking:", error)
-      this.isTracking = false
-      throw error
-    }
+    // Sort transactions by timestamp
+    this.transactions.sort((a, b) => a.timestamp - b.timestamp)
+
+    // Update position
+    await this.updatePosition(transaction)
   }
 
-  stopTracking(): void {
-    this.isTracking = false
-    console.log("Portfolio tracking stopped")
-  }
+  private async updatePosition(transaction: Transaction): Promise<void> {
+    const tokenAddress = transaction.tokenAddress.toLowerCase()
+    let position = this.positions.get(tokenAddress)
 
-  private async loadTransactionHistory(): Promise<void> {
-    try {
-      // This would typically load from a database or blockchain indexer
-      // For demonstration, we'll create some mock transactions
-      console.log("Loading transaction history...")
-
-      // In a real implementation, you would:
-      // 1. Query blockchain events for token transfers
-      // 2. Load from a local database
-      // 3. Use a service like Moralis, Alchemy, or The Graph
-
-      this.transactions = []
-    } catch (error) {
-      console.error("Error loading transaction history:", error)
-      throw error
-    }
-  }
-
-  async addTransaction(transaction: Omit<Transaction, "id">): Promise<void> {
-    const fullTransaction: Transaction = {
-      ...transaction,
-      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    }
-
-    this.transactions.push(fullTransaction)
-    await this.updatePositionFromTransaction(fullTransaction)
-
-    console.log(`Transaction added: ${transaction.type} ${transaction.amount} ${transaction.symbol}`)
-  }
-
-  private async updatePositionFromTransaction(transaction: Transaction): Promise<void> {
-    const existingPosition = this.positions.get(transaction.tokenAddress)
-
-    if (!existingPosition) {
+    if (!position) {
       // Create new position
-      if (transaction.type === "buy") {
-        const position: Position = {
-          tokenAddress: transaction.tokenAddress,
-          symbol: transaction.symbol,
-          name: transaction.symbol, // Would fetch from contract in real implementation
-          balance: transaction.amount,
-          decimals: 18, // Would fetch from contract
-          price: transaction.price,
-          value: transaction.value,
-          costBasis: transaction.value,
-          unrealizedPnL: 0,
-          unrealizedPnLPercentage: 0,
-          averageBuyPrice: transaction.price,
-          totalBought: transaction.amount,
-          totalSold: "0",
-          firstBuyDate: transaction.timestamp,
-          lastTradeDate: transaction.timestamp,
-        }
-        this.positions.set(transaction.tokenAddress, position)
+      position = {
+        tokenAddress: transaction.tokenAddress,
+        tokenSymbol: transaction.tokenSymbol,
+        tokenName: transaction.tokenSymbol, // Would need to fetch actual name
+        balance: "0",
+        balanceUSD: 0,
+        averageBuyPrice: 0,
+        currentPrice: transaction.pricePerToken,
+        totalInvested: 0,
+        unrealizedPnL: 0,
+        unrealizedPnLPercent: 0,
+        firstBoughtAt: transaction.timestamp,
+        lastUpdated: Date.now(),
       }
-    } else {
-      // Update existing position
-      const position = existingPosition
-      const currentBalance = Number.parseFloat(position.balance)
-      const transactionAmount = Number.parseFloat(transaction.amount)
-
-      if (transaction.type === "buy") {
-        const newBalance = currentBalance + transactionAmount
-        const newCostBasis = position.costBasis + transaction.value
-
-        position.balance = newBalance.toString()
-        position.costBasis = newCostBasis
-        position.averageBuyPrice = newCostBasis / newBalance
-        position.totalBought = (Number.parseFloat(position.totalBought) + transactionAmount).toString()
-      } else if (transaction.type === "sell") {
-        const newBalance = Math.max(0, currentBalance - transactionAmount)
-        const soldRatio = transactionAmount / currentBalance
-        const costBasisReduction = position.costBasis * soldRatio
-
-        position.balance = newBalance.toString()
-        position.costBasis = Math.max(0, position.costBasis - costBasisReduction)
-        position.totalSold = (Number.parseFloat(position.totalSold) + transactionAmount).toString()
-      }
-
-      position.lastTradeDate = transaction.timestamp
-      position.value = Number.parseFloat(position.balance) * position.price
-      position.unrealizedPnL = position.value - position.costBasis
-      position.unrealizedPnLPercentage =
-        position.costBasis > 0 ? (position.unrealizedPnL / position.costBasis) * 100 : 0
     }
+
+    const currentBalance = Number.parseFloat(position.balance)
+    const transactionAmount = Number.parseFloat(transaction.amount)
+
+    if (transaction.type === "buy" || transaction.type === "transfer_in") {
+      // Calculate new average buy price
+      const currentInvestment = position.totalInvested
+      const newInvestment = transaction.totalValue
+      const newBalance = currentBalance + transactionAmount
+
+      if (newBalance > 0) {
+        position.averageBuyPrice = (currentInvestment + newInvestment) / newBalance
+      }
+
+      position.balance = newBalance.toString()
+      position.totalInvested += newInvestment
+    } else if (transaction.type === "sell" || transaction.type === "transfer_out") {
+      const newBalance = Math.max(0, currentBalance - transactionAmount)
+      position.balance = newBalance.toString()
+
+      // Reduce total invested proportionally
+      if (currentBalance > 0) {
+        const sellRatio = transactionAmount / currentBalance
+        position.totalInvested *= 1 - sellRatio
+      }
+    }
+
+    // Update current price and P&L
+    position.currentPrice = transaction.pricePerToken
+    position.balanceUSD = Number.parseFloat(position.balance) * position.currentPrice
+    position.unrealizedPnL = position.balanceUSD - position.totalInvested
+    position.unrealizedPnLPercent =
+      position.totalInvested > 0 ? (position.unrealizedPnL / position.totalInvested) * 100 : 0
+    position.lastUpdated = Date.now()
+
+    this.positions.set(tokenAddress, position)
   }
 
-  async updatePositions(): Promise<void> {
-    if (!this.isTracking) return
-
-    console.log("Updating portfolio positions...")
-
-    for (const position of this.positions.values()) {
-      try {
-        // Update current price (would integrate with price feed)
-        position.price = await this.getCurrentTokenPrice(position.tokenAddress)
-
-        // Recalculate values
-        const balance = Number.parseFloat(position.balance)
-        position.value = balance * position.price
-        position.unrealizedPnL = position.value - position.costBasis
-        position.unrealizedPnLPercentage =
-          position.costBasis > 0 ? (position.unrealizedPnL / position.costBasis) * 100 : 0
-      } catch (error) {
-        console.error(`Error updating position for ${position.symbol}:`, error)
+  async updatePositionPrices(priceData: Map<string, number>): Promise<void> {
+    for (const [tokenAddress, position] of this.positions) {
+      const currentPrice = priceData.get(tokenAddress.toLowerCase())
+      if (currentPrice !== undefined) {
+        position.currentPrice = currentPrice
+        position.balanceUSD = Number.parseFloat(position.balance) * currentPrice
+        position.unrealizedPnL = position.balanceUSD - position.totalInvested
+        position.unrealizedPnLPercent =
+          position.totalInvested > 0 ? (position.unrealizedPnL / position.totalInvested) * 100 : 0
+        position.lastUpdated = Date.now()
       }
     }
   }
 
-  private async getCurrentTokenPrice(tokenAddress: string): Promise<number> {
-    // This would integrate with a price feed service
-    // For demonstration, return a mock price
-    return Math.random() * 100
+  async syncWithBlockchain(): Promise<void> {
+    if (!this.walletAddress) {
+      throw new Error("Wallet address not set")
+    }
+
+    try {
+      // Get current block number
+      const currentBlock = await this.provider.getBlockNumber()
+
+      // This is a simplified implementation
+      // In production, you'd use an indexer service like The Graph or Etherscan API
+      console.log(`Syncing portfolio for ${this.walletAddress} up to block ${currentBlock}`)
+
+      // For now, just update ETH balance
+      const ethBalance = await this.provider.getBalance(this.walletAddress)
+      const ethPosition: Position = {
+        tokenAddress: "0x0000000000000000000000000000000000000000",
+        tokenSymbol: "ETH",
+        tokenName: "Ethereum",
+        balance: ethers.formatEther(ethBalance),
+        balanceUSD: 0, // Would need ETH price
+        averageBuyPrice: 0,
+        currentPrice: 0,
+        totalInvested: 0,
+        unrealizedPnL: 0,
+        unrealizedPnLPercent: 0,
+        firstBoughtAt: Date.now(),
+        lastUpdated: Date.now(),
+      }
+
+      this.positions.set("0x0000000000000000000000000000000000000000", ethPosition)
+    } catch (error: any) {
+      throw new Error(`Failed to sync with blockchain: ${error.message}`)
+    }
   }
 
   getPositions(): Position[] {
@@ -202,159 +190,121 @@ export class PortfolioTracker {
   }
 
   getPosition(tokenAddress: string): Position | null {
-    return this.positions.get(tokenAddress) || null
+    return this.positions.get(tokenAddress.toLowerCase()) || null
   }
 
   getTransactions(): Transaction[] {
-    return [...this.transactions].sort((a, b) => b.timestamp - a.timestamp)
+    return [...this.transactions]
   }
 
   getTransactionsByToken(tokenAddress: string): Transaction[] {
-    return this.transactions.filter((tx) => tx.tokenAddress === tokenAddress).sort((a, b) => b.timestamp - a.timestamp)
+    return this.transactions.filter((tx) => tx.tokenAddress.toLowerCase() === tokenAddress.toLowerCase())
   }
 
   getPortfolioSummary(): PortfolioSummary {
     const positions = this.getPositions()
 
-    if (positions.length === 0) {
-      return {
-        totalValue: 0,
-        totalCostBasis: 0,
-        totalUnrealizedPnL: 0,
-        totalUnrealizedPnLPercentage: 0,
-        totalPositions: 0,
-        topGainer: null,
-        topLoser: null,
-        dayChange: 0,
-        dayChangePercentage: 0,
-      }
-    }
+    const totalValueUSD = positions.reduce((sum, pos) => sum + pos.balanceUSD, 0)
+    const totalInvestedUSD = positions.reduce((sum, pos) => sum + pos.totalInvested, 0)
+    const totalUnrealizedPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0)
+    const totalGasFeesUSD = this.transactions.reduce((sum, tx) => sum + tx.gasFeesUSD, 0)
 
-    const totalValue = positions.reduce((sum, pos) => sum + pos.value, 0)
-    const totalCostBasis = positions.reduce((sum, pos) => sum + pos.costBasis, 0)
-    const totalUnrealizedPnL = totalValue - totalCostBasis
-    const totalUnrealizedPnLPercentage = totalCostBasis > 0 ? (totalUnrealizedPnL / totalCostBasis) * 100 : 0
-
-    // Find top gainer and loser
-    const gainers = positions.filter((pos) => pos.unrealizedPnLPercentage > 0)
-    const losers = positions.filter((pos) => pos.unrealizedPnLPercentage < 0)
-
-    const topGainer =
-      gainers.length > 0
-        ? gainers.reduce((max, pos) => (pos.unrealizedPnLPercentage > max.unrealizedPnLPercentage ? pos : max))
-        : null
-
-    const topLoser =
-      losers.length > 0
-        ? losers.reduce((min, pos) => (pos.unrealizedPnLPercentage < min.unrealizedPnLPercentage ? pos : min))
-        : null
+    // Calculate realized P&L from sell transactions
+    const totalRealizedPnL = this.transactions
+      .filter((tx) => tx.type === "sell")
+      .reduce((sum, tx) => {
+        // This is simplified - would need to track cost basis properly
+        return sum + (tx.totalValue - tx.totalValue * 0.8) // Assuming 20% profit
+      }, 0)
 
     return {
-      totalValue,
-      totalCostBasis,
+      totalValueUSD,
+      totalInvestedUSD,
       totalUnrealizedPnL,
-      totalUnrealizedPnLPercentage,
-      totalPositions: positions.length,
-      topGainer,
-      topLoser,
-      dayChange: 0, // Would calculate from historical data
-      dayChangePercentage: 0, // Would calculate from historical data
+      totalUnrealizedPnLPercent: totalInvestedUSD > 0 ? (totalUnrealizedPnL / totalInvestedUSD) * 100 : 0,
+      totalRealizedPnL,
+      totalGasFeesUSD,
+      positionCount: positions.length,
+      transactionCount: this.transactions.length,
+      lastUpdated: Date.now(),
     }
   }
 
-  getPerformanceMetrics(): {
-    totalTrades: number
-    winRate: number
-    averageWin: number
-    averageLoss: number
-    profitFactor: number
-    sharpeRatio: number
-  } {
-    const completedTrades = this.getCompletedTrades()
+  exportToCSV(): string {
+    const headers = [
+      "Hash",
+      "Type",
+      "Token",
+      "Amount",
+      "Price",
+      "Total Value",
+      "Gas Fees ETH",
+      "Gas Fees USD",
+      "Timestamp",
+      "Block",
+    ]
 
-    if (completedTrades.length === 0) {
-      return {
-        totalTrades: 0,
-        winRate: 0,
-        averageWin: 0,
-        averageLoss: 0,
-        profitFactor: 0,
-        sharpeRatio: 0,
-      }
-    }
+    const rows = this.transactions.map((tx) => [
+      tx.hash,
+      tx.type,
+      tx.tokenSymbol,
+      tx.amount,
+      tx.pricePerToken.toString(),
+      tx.totalValue.toString(),
+      tx.gasFeesETH,
+      tx.gasFeesUSD.toString(),
+      new Date(tx.timestamp).toISOString(),
+      tx.blockNumber.toString(),
+    ])
 
-    const wins = completedTrades.filter((trade) => trade.pnl > 0)
-    const losses = completedTrades.filter((trade) => trade.pnl < 0)
-
-    const totalWins = wins.reduce((sum, trade) => sum + trade.pnl, 0)
-    const totalLosses = Math.abs(losses.reduce((sum, trade) => sum + trade.pnl, 0))
-
-    return {
-      totalTrades: completedTrades.length,
-      winRate: (wins.length / completedTrades.length) * 100,
-      averageWin: wins.length > 0 ? totalWins / wins.length : 0,
-      averageLoss: losses.length > 0 ? totalLosses / losses.length : 0,
-      profitFactor: totalLosses > 0 ? totalWins / totalLosses : 0,
-      sharpeRatio: 0, // Would calculate with proper risk-free rate and volatility
-    }
-  }
-
-  private getCompletedTrades(): Array<{ pnl: number; duration: number }> {
-    // This would analyze buy/sell pairs to determine completed trades
-    // For now, return empty array
-    return []
-  }
-
-  exportData(): {
-    positions: Position[]
-    transactions: Transaction[]
-    summary: PortfolioSummary
-    exportDate: number
-  } {
-    return {
-      positions: this.getPositions(),
-      transactions: this.getTransactions(),
-      summary: this.getPortfolioSummary(),
-      exportDate: Date.now(),
-    }
-  }
-
-  importData(data: {
-    positions: Position[]
-    transactions: Transaction[]
-  }): void {
-    this.positions.clear()
-    this.transactions = []
-
-    // Import transactions first
-    data.transactions.forEach((tx) => {
-      this.transactions.push(tx)
-    })
-
-    // Import positions
-    data.positions.forEach((pos) => {
-      this.positions.set(pos.tokenAddress, pos)
-    })
-
-    console.log(`Imported ${data.positions.length} positions and ${data.transactions.length} transactions`)
+    return [headers, ...rows].map((row) => row.join(",")).join("\n")
   }
 
   clearData(): void {
     this.positions.clear()
     this.transactions = []
-    console.log("Portfolio data cleared")
   }
 
-  isActive(): boolean {
-    return this.isTracking
+  async getTokenBalance(tokenAddress: string): Promise<string> {
+    if (!this.walletAddress) {
+      throw new Error("Wallet address not set")
+    }
+
+    try {
+      if (tokenAddress === "0x0000000000000000000000000000000000000000") {
+        // ETH balance
+        const balance = await this.provider.getBalance(this.walletAddress)
+        return ethers.formatEther(balance)
+      } else {
+        // ERC20 token balance
+        const tokenContract = new ethers.Contract(
+          tokenAddress,
+          ["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)"],
+          this.provider,
+        )
+
+        const [balance, decimals] = await Promise.all([
+          tokenContract.balanceOf(this.walletAddress),
+          tokenContract.decimals(),
+        ])
+
+        return ethers.formatUnits(balance, decimals)
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to get token balance: ${error.message}`)
+    }
   }
 
-  getWalletAddress(): string {
-    return this.walletAddress
+  // Helper function to safely format numbers
+  private safeValue(value: number | undefined | null): number {
+    return value && !isNaN(value) ? value : 0
   }
 
-  setWalletAddress(address: string): void {
-    this.walletAddress = address.toLowerCase()
-    this.clearData()
+  // Helper function to format percentage
+  private formatPercentage(value: number | undefined | null): string {
+    const safeVal = this.safeValue(value)
+    return safeVal.toFixed(2)
   }
 }
+
+export default PortfolioTracker

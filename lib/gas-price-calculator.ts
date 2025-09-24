@@ -1,387 +1,264 @@
 import { ethers } from "ethers"
 
-export interface GasInfo {
-  gasPrice: bigint
-  gasPriceGwei: number
-  gasCostUSD: number
-  estimatedTime: string
-  priority: "LOW" | "STANDARD" | "HIGH" | "URGENT"
-}
-
-export interface GasStrategy {
-  maxGasPriceGwei: number
-  maxGasCostUSD: number
-  priorityLevel: "LOW" | "STANDARD" | "HIGH" | "URGENT"
-  dynamicAdjustment: boolean
-}
-
 export interface GasEstimate {
-  gasLimit: bigint
-  gasPrice: bigint
-  maxFeePerGas: bigint
-  maxPriorityFeePerGas: bigint
-  estimatedCost: bigint
-  estimatedCostUSD: number
+  gasLimit: string
+  gasPrice: string
+  gasPriceGwei: string
+  totalCostETH: string
+  totalCostUSD: number
+  estimatedTime: string
+  confidence: number
 }
 
-export interface GasSettings {
-  speed: "slow" | "standard" | "fast" | "instant"
-  customGasPrice?: bigint
-  customMaxFeePerGas?: bigint
-  customMaxPriorityFeePerGas?: bigint
+export interface GasPriceOptions {
+  slow: GasEstimate
+  standard: GasEstimate
+  fast: GasEstimate
+  instant: GasEstimate
+}
+
+export interface NetworkCongestion {
+  level: "low" | "medium" | "high" | "extreme"
+  description: string
+  recommendedAction: string
 }
 
 export class GasPriceCalculator {
   private provider: ethers.Provider
-  private ethPriceUSD = 2000 // Default ETH price, should be updated from price feed
+  private ethPriceUSD = 2000 // Default ETH price, should be updated
 
   constructor(provider: ethers.Provider) {
     this.provider = provider
   }
 
-  async updateETHPrice(): Promise<void> {
-    try {
-      // In a real implementation, fetch from a price API
-      // For now, use a mock price
-      this.ethPriceUSD = 2000 + (Math.random() - 0.5) * 200
-    } catch (error) {
-      console.error("Error updating ETH price:", error)
-    }
+  async updateETHPrice(priceUSD: number): Promise<void> {
+    this.ethPriceUSD = priceUSD
   }
 
-  async getCurrentGasPrice(): Promise<bigint> {
+  async getCurrentGasPrices(): Promise<GasPriceOptions> {
     try {
       const feeData = await this.provider.getFeeData()
-      return feeData.gasPrice || BigInt(0)
-    } catch (error) {
-      console.error("Error getting gas price:", error)
-      return BigInt(20000000000) // 20 gwei fallback
+      const baseFee = feeData.gasPrice || ethers.parseUnits("20", "gwei")
+
+      // Calculate different speed tiers
+      const slowGasPrice = baseFee
+      const standardGasPrice = (baseFee * BigInt(110)) / BigInt(100) // +10%
+      const fastGasPrice = (baseFee * BigInt(125)) / BigInt(100) // +25%
+      const instantGasPrice = (baseFee * BigInt(150)) / BigInt(100) // +50%
+
+      // Standard gas limit for token transfers
+      const standardGasLimit = "21000"
+
+      return {
+        slow: await this.createGasEstimate(slowGasPrice, standardGasLimit, "5-10 min", 70),
+        standard: await this.createGasEstimate(standardGasPrice, standardGasLimit, "2-5 min", 85),
+        fast: await this.createGasEstimate(fastGasPrice, standardGasLimit, "1-2 min", 95),
+        instant: await this.createGasEstimate(instantGasPrice, standardGasLimit, "< 1 min", 99),
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to get gas prices: ${error.message}`)
     }
   }
 
-  async getGasPriceRecommendations(): Promise<{
-    slow: bigint
-    standard: bigint
-    fast: bigint
-    instant: bigint
-  }> {
-    try {
-      const currentGasPrice = await this.getCurrentGasPrice()
+  private async createGasEstimate(
+    gasPrice: bigint,
+    gasLimit: string,
+    estimatedTime: string,
+    confidence: number,
+  ): Promise<GasEstimate> {
+    const gasPriceGwei = ethers.formatUnits(gasPrice, "gwei")
+    const totalCostWei = gasPrice * BigInt(gasLimit)
+    const totalCostETH = ethers.formatEther(totalCostWei)
+    const totalCostUSD = Number.parseFloat(totalCostETH) * this.ethPriceUSD
 
-      return {
-        slow: (currentGasPrice * BigInt(80)) / BigInt(100), // 80% of current
-        standard: currentGasPrice,
-        fast: (currentGasPrice * BigInt(120)) / BigInt(100), // 120% of current
-        instant: (currentGasPrice * BigInt(150)) / BigInt(100), // 150% of current
-      }
-    } catch (error) {
-      console.error("Error getting gas price recommendations:", error)
-      // Fallback values in gwei
-      return {
-        slow: BigInt(15000000000), // 15 gwei
-        standard: BigInt(20000000000), // 20 gwei
-        fast: BigInt(25000000000), // 25 gwei
-        instant: BigInt(30000000000), // 30 gwei
-      }
-    }
-  }
-
-  async getEIP1559Recommendations(): Promise<{
-    slow: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }
-    standard: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }
-    fast: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }
-    instant: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }
-  }> {
-    try {
-      const feeData = await this.provider.getFeeData()
-      const baseFee = feeData.maxFeePerGas || BigInt(20000000000)
-
-      const priorityFees = {
-        slow: BigInt(1000000000), // 1 gwei
-        standard: BigInt(2000000000), // 2 gwei
-        fast: BigInt(3000000000), // 3 gwei
-        instant: BigInt(5000000000), // 5 gwei
-      }
-
-      return {
-        slow: {
-          maxFeePerGas: baseFee + priorityFees.slow,
-          maxPriorityFeePerGas: priorityFees.slow,
-        },
-        standard: {
-          maxFeePerGas: baseFee + priorityFees.standard,
-          maxPriorityFeePerGas: priorityFees.standard,
-        },
-        fast: {
-          maxFeePerGas: baseFee + priorityFees.fast,
-          maxPriorityFeePerGas: priorityFees.fast,
-        },
-        instant: {
-          maxFeePerGas: baseFee + priorityFees.instant,
-          maxPriorityFeePerGas: priorityFees.instant,
-        },
-      }
-    } catch (error) {
-      console.error("Error getting EIP-1559 recommendations:", error)
-      // Fallback values
-      return {
-        slow: {
-          maxFeePerGas: BigInt(20000000000),
-          maxPriorityFeePerGas: BigInt(1000000000),
-        },
-        standard: {
-          maxFeePerGas: BigInt(25000000000),
-          maxPriorityFeePerGas: BigInt(2000000000),
-        },
-        fast: {
-          maxFeePerGas: BigInt(30000000000),
-          maxPriorityFeePerGas: BigInt(3000000000),
-        },
-        instant: {
-          maxFeePerGas: BigInt(40000000000),
-          maxPriorityFeePerGas: BigInt(5000000000),
-        },
-      }
+    return {
+      gasLimit,
+      gasPrice: gasPrice.toString(),
+      gasPriceGwei,
+      totalCostETH,
+      totalCostUSD,
+      estimatedTime,
+      confidence,
     }
   }
 
   async estimateTransactionGas(
-    transaction: {
-      to: string
-      data?: string
-      value?: bigint
-    },
-    settings: GasSettings = { speed: "standard" },
+    transaction: ethers.TransactionRequest,
+    speed: "slow" | "standard" | "fast" | "instant" = "standard",
   ): Promise<GasEstimate> {
     try {
-      // Estimate gas limit
+      // Estimate gas limit for the specific transaction
       const gasLimit = await this.provider.estimateGas(transaction)
+      const gasPrices = await this.getCurrentGasPrices()
+      const selectedGasPrice = gasPrices[speed]
 
-      let gasPrice: bigint
-      let maxFeePerGas: bigint
-      let maxPriorityFeePerGas: bigint
-
-      if (settings.customGasPrice) {
-        gasPrice = settings.customGasPrice
-        maxFeePerGas = settings.customMaxFeePerGas || gasPrice
-        maxPriorityFeePerGas = settings.customMaxPriorityFeePerGas || BigInt(2000000000)
-      } else {
-        const recommendations = await this.getEIP1559Recommendations()
-        const speedSettings = recommendations[settings.speed]
-
-        gasPrice = speedSettings.maxFeePerGas
-        maxFeePerGas = speedSettings.maxFeePerGas
-        maxPriorityFeePerGas = speedSettings.maxPriorityFeePerGas
-      }
-
-      const estimatedCost = gasLimit * maxFeePerGas
-      const estimatedCostUSD = this.weiToUSD(estimatedCost)
+      // Recalculate with actual gas limit
+      const gasPrice = BigInt(selectedGasPrice.gasPrice)
+      const totalCostWei = gasPrice * gasLimit
+      const totalCostETH = ethers.formatEther(totalCostWei)
+      const totalCostUSD = Number.parseFloat(totalCostETH) * this.ethPriceUSD
 
       return {
-        gasLimit,
-        gasPrice,
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-        estimatedCost,
-        estimatedCostUSD,
+        gasLimit: gasLimit.toString(),
+        gasPrice: selectedGasPrice.gasPrice,
+        gasPriceGwei: selectedGasPrice.gasPriceGwei,
+        totalCostETH,
+        totalCostUSD,
+        estimatedTime: selectedGasPrice.estimatedTime,
+        confidence: selectedGasPrice.confidence,
       }
-    } catch (error) {
-      console.error("Error estimating gas:", error)
-      throw new Error(`Gas estimation failed: ${error}`)
+    } catch (error: any) {
+      throw new Error(`Failed to estimate transaction gas: ${error.message}`)
     }
   }
 
-  async estimateSwapGas(
-    tokenIn: string,
-    tokenOut: string,
-    amountIn: bigint,
-    settings: GasSettings = { speed: "standard" },
-  ): Promise<GasEstimate> {
+  async getNetworkCongestion(): Promise<NetworkCongestion> {
     try {
-      // This would typically interact with a DEX router contract
-      // For demonstration, we'll use estimated values based on swap complexity
+      const feeData = await this.provider.getFeeData()
+      const gasPrice = feeData.gasPrice || ethers.parseUnits("20", "gwei")
+      const gasPriceGwei = Number.parseFloat(ethers.formatUnits(gasPrice, "gwei"))
 
-      let baseGasLimit: bigint
-
-      if (tokenIn === ethers.ZeroAddress || tokenOut === ethers.ZeroAddress) {
-        // ETH to token or token to ETH swap
-        baseGasLimit = BigInt(150000)
-      } else {
-        // Token to token swap
-        baseGasLimit = BigInt(200000)
-      }
-
-      // Add buffer for price impact and slippage
-      const gasLimit = (baseGasLimit * BigInt(120)) / BigInt(100) // 20% buffer
-
-      const recommendations = await this.getEIP1559Recommendations()
-      const speedSettings = recommendations[settings.speed]
-
-      const estimatedCost = gasLimit * speedSettings.maxFeePerGas
-      const estimatedCostUSD = this.weiToUSD(estimatedCost)
-
-      return {
-        gasLimit,
-        gasPrice: speedSettings.maxFeePerGas,
-        maxFeePerGas: speedSettings.maxFeePerGas,
-        maxPriorityFeePerGas: speedSettings.maxPriorityFeePerGas,
-        estimatedCost,
-        estimatedCostUSD,
-      }
-    } catch (error) {
-      console.error("Error estimating swap gas:", error)
-      throw new Error(`Swap gas estimation failed: ${error}`)
-    }
-  }
-
-  private weiToUSD(wei: bigint): number {
-    const eth = Number(ethers.formatEther(wei))
-    return eth * this.ethPriceUSD
-  }
-
-  formatGasPrice(gasPrice: bigint): string {
-    const gwei = Number(ethers.formatUnits(gasPrice, "gwei"))
-    return `${gwei.toFixed(2)} gwei`
-  }
-
-  formatGasCost(cost: bigint): string {
-    const eth = ethers.formatEther(cost)
-    const usd = this.weiToUSD(cost)
-    return `${Number.parseFloat(eth).toFixed(6)} ETH (~$${usd.toFixed(2)})`
-  }
-
-  async getOptimalGasSettings(transaction: any, maxCostUSD = 50): Promise<GasSettings> {
-    try {
-      const recommendations = await this.getEIP1559Recommendations()
-
-      // Try each speed setting and find the fastest one within budget
-      const speeds: Array<keyof typeof recommendations> = ["slow", "standard", "fast", "instant"]
-
-      for (const speed of speeds.reverse()) {
-        const estimate = await this.estimateTransactionGas(transaction, { speed })
-
-        if (estimate.estimatedCostUSD <= maxCostUSD) {
-          return { speed }
-        }
-      }
-
-      // If all are too expensive, return slow with custom lower gas
-      const slowSettings = recommendations.slow
-      const reducedMaxFee = (slowSettings.maxFeePerGas * BigInt(80)) / BigInt(100)
-
-      return {
-        speed: "slow",
-        customMaxFeePerGas: reducedMaxFee,
-        customMaxPriorityFeePerGas: slowSettings.maxPriorityFeePerGas,
-      }
-    } catch (error) {
-      console.error("Error getting optimal gas settings:", error)
-      return { speed: "standard" }
-    }
-  }
-
-  async waitForGasPrice(targetGasPrice: bigint, timeoutMs = 300000): Promise<boolean> {
-    const startTime = Date.now()
-
-    while (Date.now() - startTime < timeoutMs) {
-      try {
-        const currentGasPrice = await this.getCurrentGasPrice()
-
-        if (currentGasPrice <= targetGasPrice) {
-          return true
-        }
-
-        // Wait 10 seconds before checking again
-        await new Promise((resolve) => setTimeout(resolve, 10000))
-      } catch (error) {
-        console.error("Error checking gas price:", error)
-        await new Promise((resolve) => setTimeout(resolve, 10000))
-      }
-    }
-
-    return false
-  }
-
-  getGasSpeedDescription(speed: GasSettings["speed"]): string {
-    const descriptions = {
-      slow: "Low cost, may take 5-10 minutes",
-      standard: "Balanced cost and speed, ~2-5 minutes",
-      fast: "Higher cost, usually under 2 minutes",
-      instant: "Highest cost, priority execution",
-    }
-
-    return descriptions[speed]
-  }
-
-  async getNetworkCongestion(): Promise<{
-    level: "low" | "medium" | "high" | "extreme"
-    description: string
-    recommendedAction: string
-  }> {
-    try {
-      const currentGasPrice = await this.getCurrentGasPrice()
-      const gweiPrice = Number(ethers.formatUnits(currentGasPrice, "gwei"))
-
-      if (gweiPrice < 20) {
+      // Determine congestion level based on gas price
+      if (gasPriceGwei < 20) {
         return {
           level: "low",
-          description: "Network is not congested",
-          recommendedAction: "Good time to trade with standard gas settings",
+          description: "Network is running smoothly with low gas prices",
+          recommendedAction: "Good time to make transactions",
         }
-      } else if (gweiPrice < 50) {
+      } else if (gasPriceGwei < 50) {
         return {
           level: "medium",
-          description: "Moderate network congestion",
-          recommendedAction: "Consider using fast gas for time-sensitive trades",
+          description: "Moderate network activity with average gas prices",
+          recommendedAction: "Consider waiting for lower fees if not urgent",
         }
-      } else if (gweiPrice < 100) {
+      } else if (gasPriceGwei < 100) {
         return {
           level: "high",
-          description: "High network congestion",
-          recommendedAction: "Use instant gas only for urgent trades",
+          description: "High network congestion with elevated gas prices",
+          recommendedAction: "Wait for congestion to decrease unless urgent",
         }
       } else {
         return {
           level: "extreme",
-          description: "Extreme network congestion",
-          recommendedAction: "Consider waiting for gas prices to decrease",
+          description: "Extreme network congestion with very high gas prices",
+          recommendedAction: "Strongly recommend waiting for better conditions",
         }
       }
-    } catch (error) {
-      console.error("Error checking network congestion:", error)
-      return {
-        level: "medium",
-        description: "Unable to determine congestion level",
-        recommendedAction: "Use standard gas settings",
+    } catch (error: any) {
+      throw new Error(`Failed to get network congestion: ${error.message}`)
+    }
+  }
+
+  async optimizeGasPrice(transaction: ethers.TransactionRequest, maxWaitTimeMinutes = 10): Promise<GasEstimate> {
+    try {
+      const congestion = await this.getNetworkCongestion()
+      const gasPrices = await this.getCurrentGasPrices()
+
+      // Choose optimal gas price based on congestion and wait time
+      if (maxWaitTimeMinutes <= 2) {
+        return await this.estimateTransactionGas(transaction, "instant")
+      } else if (maxWaitTimeMinutes <= 5) {
+        return await this.estimateTransactionGas(transaction, "fast")
+      } else if (congestion.level === "low" || congestion.level === "medium") {
+        return await this.estimateTransactionGas(transaction, "standard")
+      } else {
+        return await this.estimateTransactionGas(transaction, "slow")
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to optimize gas price: ${error.message}`)
+    }
+  }
+
+  async calculateMaxFeePerGas(baseFeeMultiplier = 2): Promise<string> {
+    try {
+      const block = await this.provider.getBlock("latest")
+      if (!block || !block.baseFeePerGas) {
+        throw new Error("Unable to get base fee")
+      }
+
+      const maxFeePerGas = block.baseFeePerGas * BigInt(baseFeeMultiplier)
+      return maxFeePerGas.toString()
+    } catch (error: any) {
+      throw new Error(`Failed to calculate max fee per gas: ${error.message}`)
+    }
+  }
+
+  async calculateMaxPriorityFeePerGas(): Promise<string> {
+    try {
+      // This is a simplified implementation
+      // In production, you'd want to analyze recent blocks for better estimation
+      const priorityFee = ethers.parseUnits("2", "gwei") // 2 gwei priority fee
+      return priorityFee.toString()
+    } catch (error: any) {
+      throw new Error(`Failed to calculate max priority fee per gas: ${error.message}`)
+    }
+  }
+
+  async getGasHistory(blocks = 10): Promise<Array<{ blockNumber: number; gasPrice: string; baseFee?: string }>> {
+    try {
+      const currentBlock = await this.provider.getBlockNumber()
+      const history: Array<{ blockNumber: number; gasPrice: string; baseFee?: string }> = []
+
+      for (let i = 0; i < blocks; i++) {
+        const blockNumber = currentBlock - i
+        const block = await this.provider.getBlock(blockNumber)
+
+        if (block) {
+          history.push({
+            blockNumber,
+            gasPrice: "0", // Would need to calculate from transactions
+            baseFee: block.baseFeePerGas?.toString(),
+          })
+        }
+      }
+
+      return history
+    } catch (error: any) {
+      throw new Error(`Failed to get gas history: ${error.message}`)
+    }
+  }
+
+  formatGasPrice(gasPrice: string, unit: "wei" | "gwei" | "eth" = "gwei"): string {
+    try {
+      switch (unit) {
+        case "wei":
+          return gasPrice
+        case "gwei":
+          return ethers.formatUnits(gasPrice, "gwei")
+        case "eth":
+          return ethers.formatEther(gasPrice)
+        default:
+          return gasPrice
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to format gas price: ${error.message}`)
+    }
+  }
+
+  async waitForGasPrice(targetGasPriceGwei: number, timeoutMinutes = 30): Promise<boolean> {
+    const timeoutMs = timeoutMinutes * 60 * 1000
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        const feeData = await this.provider.getFeeData()
+        const currentGasPrice = feeData.gasPrice || ethers.parseUnits("20", "gwei")
+        const currentGasPriceGwei = Number.parseFloat(ethers.formatUnits(currentGasPrice, "gwei"))
+
+        if (currentGasPriceGwei <= targetGasPriceGwei) {
+          return true
+        }
+
+        // Wait 30 seconds before checking again
+        await new Promise((resolve) => setTimeout(resolve, 30000))
+      } catch (error) {
+        console.error("Error checking gas price:", error)
+        await new Promise((resolve) => setTimeout(resolve, 30000))
       }
     }
+
+    return false // Timeout reached
   }
 }
 
-// Default gas strategies
-export const GAS_STRATEGIES = {
-  CONSERVATIVE: {
-    maxGasPriceGwei: 20,
-    maxGasCostUSD: 3,
-    priorityLevel: "LOW" as const,
-    dynamicAdjustment: false,
-  },
-  BALANCED: {
-    maxGasPriceGwei: 50,
-    maxGasCostUSD: 8,
-    priorityLevel: "STANDARD" as const,
-    dynamicAdjustment: true,
-  },
-  AGGRESSIVE: {
-    maxGasPriceGwei: 100,
-    maxGasCostUSD: 20,
-    priorityLevel: "HIGH" as const,
-    dynamicAdjustment: true,
-  },
-  URGENT: {
-    maxGasPriceGwei: 200,
-    maxGasCostUSD: 50,
-    priorityLevel: "URGENT" as const,
-    dynamicAdjustment: true,
-  },
-} as const
+export default GasPriceCalculator
