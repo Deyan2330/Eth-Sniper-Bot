@@ -5,126 +5,76 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Utility functions for the sniper bot
-export function formatAddress(address: string, length = 6): string {
-  if (!address) return ""
-  return `${address.slice(0, length)}...${address.slice(-4)}`
-}
-
-export function formatNumber(num: number, decimals = 2): string {
-  if (num === 0) return "0"
-  if (num < 0.01) return "<0.01"
-  return num.toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: decimals,
-  })
+export function formatAddress(address: string): string {
+  if (!address || typeof address !== "string") return "Invalid Address"
+  if (address.length < 10) return address
+  return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
 
 export function formatTimeAgo(timestamp: string): string {
-  const now = new Date().getTime()
-  const time = new Date(timestamp).getTime()
-  const diff = Math.floor((now - time) / 1000)
-
-  if (diff < 60) return `${diff}s ago`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
-
-export function formatEther(wei: string, decimals = 4): string {
   try {
-    const num = Number.parseFloat(wei) / Math.pow(10, 18)
-    return formatNumber(num, decimals)
-  } catch {
-    return "0"
+    const now = new Date()
+    const time = new Date(timestamp)
+    const diffInSeconds = Math.floor((now.getTime() - time.getTime()) / 1000)
+
+    if (diffInSeconds < 60) {
+      return `${diffInSeconds}s ago`
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60)
+      return `${minutes}m ago`
+    } else if (diffInSeconds < 86400) {
+      const hours = Math.floor(diffInSeconds / 3600)
+      return `${hours}h ago`
+    } else {
+      const days = Math.floor(diffInSeconds / 86400)
+      return `${days}d ago`
+    }
+  } catch (error) {
+    return "Unknown"
   }
 }
 
-export function isValidAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address)
+export function formatNumber(num: number, decimals = 2): string {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(num)
 }
 
-export function isValidPrivateKey(key: string): boolean {
-  return /^0x[a-fA-F0-9]{64}$/.test(key) || /^[a-fA-F0-9]{64}$/.test(key)
+export function formatCurrency(amount: number, currency = "USD"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+  }).format(amount)
+}
+
+export function formatPercentage(value: number, decimals = 1): string {
+  return `${value.toFixed(decimals)}%`
+}
+
+export function safeValue(value: any, fallback: any = 0): any {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return fallback
+  }
+  return value
+}
+
+export function createLogger(name: string) {
+  return {
+    info: (message: string, ...args: any[]) => console.log(`[${name}] ${message}`, ...args),
+    warn: (message: string, ...args: any[]) => console.warn(`[${name}] ${message}`, ...args),
+    error: (message: string, ...args: any[]) => console.error(`[${name}] ${message}`, ...args),
+  }
 }
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export function safeParseFloat(value: string, fallback = 0): number {
-  const parsed = Number.parseFloat(value)
-  return isNaN(parsed) ? fallback : parsed
+export function isValidAddress(address: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(address)
 }
 
-export function safeParseInt(value: string, fallback = 0): number {
-  const parsed = Number.parseInt(value, 10)
-  return isNaN(parsed) ? fallback : parsed
-}
-
-// Gas price utilities
-export function gweiToWei(gwei: number): bigint {
-  return BigInt(Math.floor(gwei * 1e9))
-}
-
-export function weiToGwei(wei: bigint): number {
-  return Number(wei) / 1e9
-}
-
-// Fee tier utilities
-export function formatFeeTier(fee: number): string {
-  return `${(fee / 10000).toFixed(2)}%`
-}
-
-export function getFeeTierName(fee: number): string {
-  switch (fee) {
-    case 100:
-      return "Lowest (0.01%)"
-    case 500:
-      return "Low (0.05%)"
-    case 3000:
-      return "Medium (0.30%)"
-    case 10000:
-      return "High (1.00%)"
-    default:
-      return `Custom (${formatFeeTier(fee)})`
-  }
-}
-
-// Error handling utilities
-export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === "string") return error
-  return "An unknown error occurred"
-}
-
-export function logError(context: string, error: unknown): void {
-  console.error(`[${context}] ${getErrorMessage(error)}`)
-}
-
-// Validation utilities
-export function validateConfig(config: any): string[] {
-  const errors: string[] = []
-
-  if (!config.rpcUrl) {
-    errors.push("RPC URL is required")
-  }
-
-  if (config.privateKey && !isValidPrivateKey(config.privateKey)) {
-    errors.push("Invalid private key format")
-  }
-
-  if (config.minLiquidity && safeParseFloat(config.minLiquidity) < 0) {
-    errors.push("Minimum liquidity must be positive")
-  }
-
-  if (config.maxGasPrice && safeParseFloat(config.maxGasPrice) <= 0) {
-    errors.push("Max gas price must be positive")
-  }
-
-  if (config.slippage && (safeParseFloat(config.slippage) < 0 || safeParseFloat(config.slippage) > 100)) {
-    errors.push("Slippage must be between 0 and 100")
-  }
-
-  return errors
+export function isValidPrivateKey(privateKey: string): boolean {
+  return /^0x[a-fA-F0-9]{64}$/.test(privateKey)
 }

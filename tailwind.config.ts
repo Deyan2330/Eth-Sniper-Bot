@@ -1,11 +1,12 @@
 import type { Config } from "tailwindcss"
 
-const config: Config = {
+const config = {
   darkMode: ["class"],
   content: [
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
     "*.{js,ts,jsx,tsx,mdx}",
   ],
   prefix: "",
@@ -52,6 +53,13 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Custom colors for the bot
+        "blue-dark": "#0f172a",
+        "blue-card": "#1e293b",
+        "blue-accent": "#334155",
+        "blue-bright": "#60a5fa",
+        "green-live": "#10b981",
+        "purple-fee": "#8b5cf6",
         chart: {
           "1": "hsl(var(--chart-1))",
           "2": "hsl(var(--chart-2))",
@@ -59,16 +67,6 @@ const config: Config = {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
-        // Custom blue theme colors
-        "blue-dark": "#0f172a",
-        "blue-card": "#1e293b",
-        "blue-accent": "#3b82f6",
-        "blue-bright": "#60a5fa",
-        "green-live": "#10b981",
-        "purple-fee": "#8b5cf6",
-      },
-      backgroundImage: {
-        "gradient-blue": "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -85,22 +83,14 @@ const config: Config = {
           to: { height: "0" },
         },
         "pulse-blue": {
-          "0%, 100%": { opacity: "1", transform: "scale(1)" },
-          "50%": { opacity: "0.7", transform: "scale(1.1)" },
-        },
-        "pulse-green": {
           "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.8" },
+          "50%": { opacity: "0.5" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "pulse-blue": "pulse-blue 2s infinite",
-        "pulse-green": "pulse-green 2s infinite",
-      },
-      backdropBlur: {
-        xs: "2px",
+        "pulse-blue": "pulse-blue 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
       },
     },
   },

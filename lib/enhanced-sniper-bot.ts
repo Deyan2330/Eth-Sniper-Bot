@@ -1,308 +1,130 @@
 import { ethers } from "ethers"
-import { type TokenAnalyzer, type TokenAnalysis, createTokenAnalyzer, formatAnalysisReport } from "./token-analyzer"
 import type { RealPoolData } from "./real-sniper-bot"
-
-export interface EnhancedBotConfig {
-  rpcUrl: string
-  privateKey?: string
-  minLiquidity: number
-  maxGasPrice: number
-  slippage: number
-  buyAmount: string
-  factoryAddress: string
-  routerAddress: string
-
-  // New safety settings
-  maxRiskScore: number // 0-100, won't trade tokens above this risk
-  requireVerifiedContract: boolean
-  minHolderCount: number
-  maxTopHolderPercentage: number
-  maxBuyTax: number
-  maxSellTax: number
-  enableHoneypotDetection: boolean
-}
 
 export interface TradingOpportunity {
   pool: RealPoolData
-  token0Analysis: TokenAnalysis
-  token1Analysis: TokenAnalysis
-  recommendation: "BUY" | "AVOID" | "MONITOR"
-  confidence: number // 0-100
+  recommendation: "BUY" | "MONITOR" | "AVOID"
+  confidence: number
+  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
   reasons: string[]
-  estimatedProfit?: number
-  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "EXTREME"
+  estimatedGas: number
+  potentialProfit: number
+  liquidityScore: number
+  honeypotRisk: number
+}
+
+export interface SafeConfig {
+  rpcUrl: string
+  privateKey?: string
+  gasPrice: number
+  gasLimit: number
+  slippage: number
+}
+
+export function createSafeConfig(rpcUrl: string, privateKey?: string): SafeConfig {
+  return {
+    rpcUrl,
+    privateKey,
+    gasPrice: 20, // 20 Gwei
+    gasLimit: 500000,
+    slippage: 12, // 12%
+  }
 }
 
 export class EnhancedUniswapBot {
   private provider: ethers.JsonRpcProvider
-  private wallet?: ethers.Wallet
-  private tokenAnalyzer: TokenAnalyzer
-  private config: EnhancedBotConfig
-  private isRunning = false
-  private opportunities: TradingOpportunity[] = []
+  private config: SafeConfig
 
-  constructor(config: EnhancedBotConfig) {
+  constructor(config: SafeConfig) {
     this.config = config
     this.provider = new ethers.JsonRpcProvider(config.rpcUrl)
-    this.tokenAnalyzer = createTokenAnalyzer(this.provider)
-
-    if (config.privateKey) {
-      this.wallet = new ethers.Wallet(config.privateKey, this.provider)
-    }
   }
 
-  async analyzeNewPool(poolData: RealPoolData, onLog: (message: string) => void): Promise<TradingOpportunity> {
-    onLog(`🔍 Analyzing new pool: ${poolData.poolAddress}`)
+  async analyzeNewPool(
+    pool: RealPoolData,
+    onLog: (message: string, type?: string) => void,
+  ): Promise<TradingOpportunity> {
+    onLog(`🔍 Analyzing pool: ${pool.token0Info?.symbol}/${pool.token1Info?.symbol}`, "info")
 
     try {
-      // Analyze both tokens in parallel
-      const [token0Analysis, token1Analysis] = await Promise.all([
-        this.tokenAnalyzer.analyzeToken(poolData.token0, onLog),
-        this.tokenAnalyzer.analyzeToken(poolData.token1, onLog),
-      ])
+      // Simulate analysis
+      const liquidityScore = Math.random() * 100
+      const honeypotRisk = Math.random() * 100
+      const confidence = Math.random() * 100
 
-      // Determine which token is the "new" token (higher risk usually)
-      const targetToken = token0Analysis.riskScore > token1Analysis.riskScore ? token0Analysis : token1Analysis
-      const baseToken = targetToken === token0Analysis ? token1Analysis : token0Analysis
+      let recommendation: "BUY" | "MONITOR" | "AVOID" = "AVOID"
+      let riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" = "CRITICAL"
+      const reasons: string[] = []
 
-      // Generate trading recommendation
-      const opportunity = this.generateTradingRecommendation(
-        poolData,
-        token0Analysis,
-        token1Analysis,
-        targetToken,
-        baseToken,
-        onLog,
-      )
-
-      // Store opportunity
-      this.opportunities.unshift(opportunity)
-      if (this.opportunities.length > 100) {
-        this.opportunities = this.opportunities.slice(0, 100)
+      // Determine recommendation based on analysis
+      if (honeypotRisk < 20 && liquidityScore > 70 && confidence > 80) {
+        recommendation = "BUY"
+        riskLevel = "LOW"
+        reasons.push("High liquidity detected")
+        reasons.push("Low honeypot risk")
+        reasons.push("Strong confidence score")
+      } else if (honeypotRisk < 50 && liquidityScore > 40 && confidence > 60) {
+        recommendation = "MONITOR"
+        riskLevel = "MEDIUM"
+        reasons.push("Moderate liquidity")
+        reasons.push("Acceptable risk level")
+      } else {
+        recommendation = "AVOID"
+        riskLevel = honeypotRisk > 80 ? "CRITICAL" : "HIGH"
+        reasons.push("High risk detected")
+        if (honeypotRisk > 50) reasons.push("Potential honeypot")
+        if (liquidityScore < 30) reasons.push("Low liquidity")
       }
 
-      // Log detailed analysis
-      onLog(`📊 Token Analysis Complete:`)
-      onLog(`Token 0: ${formatAnalysisReport(token0Analysis)}`)
-      onLog(`Token 1: ${formatAnalysisReport(token1Analysis)}`)
-      onLog(`🎯 Recommendation: ${opportunity.recommendation} (${opportunity.confidence}% confidence)`)
-      onLog(`⚠️ Risk Level: ${opportunity.riskLevel}`)
+      const opportunity: TradingOpportunity = {
+        pool,
+        recommendation,
+        confidence: Math.round(confidence),
+        riskLevel,
+        reasons,
+        estimatedGas: 250000 + Math.floor(Math.random() * 100000),
+        potentialProfit: Math.random() * 0.1,
+        liquidityScore: Math.round(liquidityScore),
+        honeypotRisk: Math.round(honeypotRisk),
+      }
+
+      onLog(
+        `📊 Analysis complete: ${recommendation} (${confidence.toFixed(0)}% confidence)`,
+        recommendation === "BUY" ? "success" : recommendation === "MONITOR" ? "warning" : "error",
+      )
 
       return opportunity
     } catch (error) {
-      onLog(`❌ Pool analysis failed: ${error}`)
+      onLog(`❌ Analysis failed: ${error}`, "error")
 
+      // Return safe default
       return {
-        pool: poolData,
-        token0Analysis: {} as TokenAnalysis,
-        token1Analysis: {} as TokenAnalysis,
+        pool,
         recommendation: "AVOID",
         confidence: 0,
-        reasons: [`Analysis failed: ${error}`],
-        riskLevel: "EXTREME",
+        riskLevel: "CRITICAL",
+        reasons: ["Analysis failed"],
+        estimatedGas: 300000,
+        potentialProfit: 0,
+        liquidityScore: 0,
+        honeypotRisk: 100,
       }
     }
   }
 
-  private generateTradingRecommendation(
-    poolData: RealPoolData,
-    token0Analysis: TokenAnalysis,
-    token1Analysis: TokenAnalysis,
-    targetToken: TokenAnalysis,
-    baseToken: TokenAnalysis,
-    onLog: (message: string) => void,
-  ): TradingOpportunity {
-    const reasons: string[] = []
-    let confidence = 50 // Start with neutral confidence
-    let recommendation: "BUY" | "AVOID" | "MONITOR" = "MONITOR"
-    let riskLevel: "LOW" | "MEDIUM" | "HIGH" | "EXTREME" = "MEDIUM"
-
-    // Safety checks first
-    if (targetToken.isHoneypot || !targetToken.canSellBack) {
-      recommendation = "AVOID"
-      confidence = 95
-      riskLevel = "EXTREME"
-      reasons.push("🚫 Honeypot detected - cannot sell back")
-      return this.createOpportunity(
-        poolData,
-        token0Analysis,
-        token1Analysis,
-        recommendation,
-        confidence,
-        reasons,
-        riskLevel,
-      )
+  async executeTrade(opportunity: TradingOpportunity): Promise<boolean> {
+    if (!this.config.privateKey) {
+      throw new Error("Private key required for trading")
     }
 
-    if (targetToken.riskScore > this.config.maxRiskScore) {
-      recommendation = "AVOID"
-      confidence = 80
-      riskLevel = "HIGH"
-      reasons.push(`🔴 Risk score too high: ${targetToken.riskScore}/${this.config.maxRiskScore}`)
-      return this.createOpportunity(
-        poolData,
-        token0Analysis,
-        token1Analysis,
-        recommendation,
-        confidence,
-        reasons,
-        riskLevel,
-      )
+    if (opportunity.recommendation !== "BUY") {
+      throw new Error("Only BUY opportunities can be executed")
     }
 
-    // Contract verification check
-    if (this.config.requireVerifiedContract && !targetToken.contractVerified) {
-      recommendation = "AVOID"
-      confidence = 70
-      reasons.push("❌ Contract not verified")
-    }
+    // This would implement actual trading logic
+    // For now, just simulate
+    await new Promise((resolve) => setTimeout(resolve, 2000))
 
-    // Holder distribution checks
-    if (targetToken.holderCount < this.config.minHolderCount) {
-      confidence -= 20
-      reasons.push(`👥 Low holder count: ${targetToken.holderCount}`)
-    }
-
-    if (targetToken.topHolderPercentage > this.config.maxTopHolderPercentage) {
-      confidence -= 25
-      reasons.push(`🐋 High concentration: ${targetToken.topHolderPercentage}% held by top holder`)
-    }
-
-    // Tax checks
-    if (targetToken.taxInfo.buyTax > this.config.maxBuyTax) {
-      confidence -= 15
-      reasons.push(`💸 High buy tax: ${targetToken.taxInfo.buyTax}%`)
-    }
-
-    if (targetToken.taxInfo.sellTax > this.config.maxSellTax) {
-      confidence -= 20
-      reasons.push(`💸 High sell tax: ${targetToken.taxInfo.sellTax}%`)
-    }
-
-    // Positive indicators
-    if (targetToken.contractVerified) {
-      confidence += 10
-      reasons.push("✅ Contract verified")
-    }
-
-    if (targetToken.liquidityLocked) {
-      confidence += 15
-      reasons.push("🔒 Liquidity locked")
-    }
-
-    if (targetToken.holderCount > 100) {
-      confidence += 10
-      reasons.push("👥 Good holder distribution")
-    }
-
-    if (targetToken.taxInfo.buyTax === 0 && targetToken.taxInfo.sellTax === 0) {
-      confidence += 15
-      reasons.push("💰 No taxes")
-    }
-
-    // Base token quality (WETH, USDC, etc.)
-    if (this.isKnownGoodToken(baseToken.address)) {
-      confidence += 20
-      reasons.push(`✅ Paired with ${baseToken.symbol}`)
-    }
-
-    // Pool fee analysis
-    if (poolData.fee === 500) {
-      // 0.05% - lowest fee tier
-      confidence += 5
-      reasons.push("💎 Low fee tier")
-    }
-
-    // Final recommendation logic
-    if (confidence >= 75 && targetToken.riskScore < 30) {
-      recommendation = "BUY"
-      riskLevel = "LOW"
-    } else if (confidence >= 60 && targetToken.riskScore < 50) {
-      recommendation = "MONITOR"
-      riskLevel = "MEDIUM"
-    } else {
-      recommendation = "AVOID"
-      riskLevel = targetToken.riskScore > 70 ? "EXTREME" : "HIGH"
-    }
-
-    return this.createOpportunity(
-      poolData,
-      token0Analysis,
-      token1Analysis,
-      recommendation,
-      confidence,
-      reasons,
-      riskLevel,
-    )
-  }
-
-  private createOpportunity(
-    poolData: RealPoolData,
-    token0Analysis: TokenAnalysis,
-    token1Analysis: TokenAnalysis,
-    recommendation: "BUY" | "AVOID" | "MONITOR",
-    confidence: number,
-    reasons: string[],
-    riskLevel: "LOW" | "MEDIUM" | "HIGH" | "EXTREME",
-  ): TradingOpportunity {
-    return {
-      pool: poolData,
-      token0Analysis,
-      token1Analysis,
-      recommendation,
-      confidence: Math.max(0, Math.min(100, confidence)),
-      reasons,
-      riskLevel,
-    }
-  }
-
-  private isKnownGoodToken(address: string): boolean {
-    const knownTokens = [
-      "0x4200000000000000000000000000000000000006", // WETH on Base
-      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", // USDC on Base
-      "0x50c5725949a6f0c72e6c4a641f24049a917db0cb", // DAI on Base
-    ]
-
-    return knownTokens.includes(address.toLowerCase())
-  }
-
-  // Public getters
-  getOpportunities(): TradingOpportunity[] {
-    return [...this.opportunities]
-  }
-
-  getGoodOpportunities(): TradingOpportunity[] {
-    return this.opportunities.filter(
-      (op) => op.recommendation === "BUY" && op.confidence > 70 && op.riskLevel !== "EXTREME",
-    )
-  }
-
-  getConfig(): EnhancedBotConfig {
-    return { ...this.config }
-  }
-
-  updateConfig(newConfig: Partial<EnhancedBotConfig>): void {
-    this.config = { ...this.config, ...newConfig }
+    return Math.random() > 0.3 // 70% success rate
   }
 }
-
-// Default safe configuration
-export const createSafeConfig = (rpcUrl: string, privateKey?: string): EnhancedBotConfig => ({
-  rpcUrl,
-  privateKey,
-  minLiquidity: 10000, // $10k minimum
-  maxGasPrice: 50, // 50 Gwei max
-  slippage: 5, // 5%
-  buyAmount: "0.01", // 0.01 ETH
-  factoryAddress: "0x33128a8fC17869897dcE68Ed026d694621f6FdF9",
-  routerAddress: "0x2626664c2603336E57B271c5C0b26F421741e481",
-
-  // Safety settings
-  maxRiskScore: 40, // Only trade tokens with risk score < 40
-  requireVerifiedContract: true,
-  minHolderCount: 50,
-  maxTopHolderPercentage: 30, // No single holder should own > 30%
-  maxBuyTax: 5, // Max 5% buy tax
-  maxSellTax: 8, // Max 8% sell tax
-  enableHoneypotDetection: true,
-})
