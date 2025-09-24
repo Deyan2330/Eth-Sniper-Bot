@@ -13,7 +13,7 @@ import { EnhancedMetaMask, redirectToMetaMaskInstall, type MetaMaskState } from 
 interface WalletConnectorProps {
   onConnect: (connection: { type: "metamask" | "private-key"; address: string; signer?: any }) => void
   isConnected: boolean
-  walletAddress?: string
+  walletAddress?: string | null
   walletType?: "metamask" | "private-key" | "readonly"
 }
 
@@ -34,11 +34,11 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
   useEffect(() => {
     if (typeof window !== "undefined") {
       const mm = new EnhancedMetaMask({
-        onAccountChanged: (account) => {
+        onAccountsChanged: (accounts) => {
           setMetaMaskState((prev) => ({
             ...prev,
-            account,
-            isConnected: !!account,
+            account: accounts[0] || null,
+            isConnected: !!accounts[0],
           }))
         },
         onChainChanged: (chainId) => {
@@ -48,11 +48,11 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
             networkName: getNetworkName(chainId),
           }))
         },
-        onConnect: (account) => {
+        onConnect: (connectInfo) => {
           setMetaMaskState((prev) => ({
             ...prev,
-            account,
-            isConnected: true,
+            chainId: connectInfo.chainId,
+            networkName: getNetworkName(connectInfo.chainId),
           }))
         },
         onDisconnect: () => {
@@ -70,20 +70,18 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
     }
   }, [])
 
-  const getNetworkName = (chainId: number): string => {
-    const networkNames: { [key: number]: string } = {
-      1: "Ethereum Mainnet",
-      5: "Goerli Testnet",
-      11155111: "Sepolia Testnet",
-      137: "Polygon Mainnet",
-      80001: "Polygon Mumbai",
-      56: "BSC Mainnet",
-      97: "BSC Testnet",
-      8453: "Base Mainnet",
-      84531: "Base Goerli",
-      84532: "Base Sepolia",
+  const getNetworkName = (chainId: string): string => {
+    const networks: { [key: string]: string } = {
+      "0x1": "Ethereum Mainnet",
+      "0x89": "Polygon",
+      "0xa": "Optimism",
+      "0xa4b1": "Arbitrum One",
+      "0x2105": "Base",
+      "0x38": "BSC",
+      "0x5": "Goerli Testnet",
+      "0xaa36a7": "Sepolia Testnet",
     }
-    return networkNames[chainId] || `Unknown Network (${chainId})`
+    return networks[chainId] || `Chain ${chainId}`
   }
 
   const handleMetaMaskConnect = async () => {
@@ -96,12 +94,12 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
 
     setIsConnecting(true)
     try {
-      const account = await metaMask.connect()
+      const result = await metaMask.connect()
       const signer = metaMask.getSigner()
 
       onConnect({
         type: "metamask",
-        address: account,
+        address: result.account,
         signer,
       })
     } catch (error: any) {
@@ -130,9 +128,12 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
         throw new Error("Invalid private key format. Must be 64 hex characters.")
       }
 
+      // Generate a mock address for demo purposes
+      const mockAddress = "0x" + cleanKey.slice(2, 42)
+
       onConnect({
         type: "private-key",
-        address: cleanKey, // This will be replaced by the actual address in the parent component
+        address: mockAddress,
       })
       setShowPrivateKeyInput(false)
       setPrivateKey("")
@@ -142,6 +143,14 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
     } finally {
       setIsConnecting(false)
     }
+  }
+
+  // Safe address formatting with proper type checking
+  const formatAddress = (address: string | null | undefined): string => {
+    if (!address || typeof address !== "string" || address.length < 10) {
+      return "Invalid Address"
+    }
+    return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
   if (isConnected && walletAddress) {
@@ -156,7 +165,7 @@ export function WalletConnector({ onConnect, isConnected, walletAddress, walletT
               <div>
                 <p className="font-medium text-emerald-900 dark:text-emerald-100">Wallet Connected</p>
                 <p className="text-sm text-emerald-700 dark:text-emerald-300 font-mono">
-                  {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                  {formatAddress(walletAddress)}
                 </p>
               </div>
             </div>

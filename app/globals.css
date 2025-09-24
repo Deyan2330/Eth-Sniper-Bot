@@ -2,85 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
-
 @layer base {
   :root {
-    --background: 220 27% 8%;
-    --foreground: 210 40% 98%;
-    --card: 220 23% 11%;
-    --card-foreground: 210 40% 98%;
-    --popover: 220 23% 11%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
+    /* Blue Theme Colors */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 220 14% 16%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 220 14% 16%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 91% 60%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 84% 60%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 220 13% 18%;
-    --input: 220 13% 18%;
-    --ring: 217 91% 60%;
-    --chart-1: 217 91% 60%;
-    --chart-2: 142 76% 36%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.75rem;
-    --sidebar-background: 220 27% 8%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 220 23% 11%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 220 13% 18%;
-    --sidebar-ring: 217 91% 60%;
+    --radius: 0.5rem;
+
+    /* Custom Blue Theme Variables */
+    --blue-dark: #0f172a;
+    --blue-card: #1e293b;
+    --blue-accent: #3b82f6;
+    --blue-bright: #60a5fa;
+    --green-live: #10b981;
+    --purple-fee: #8b5cf6;
+    --gradient-blue: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
   }
+
   .dark {
-    --background: 220 27% 8%;
+    --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 220 23% 11%;
+    --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
-    --popover: 220 23% 11%;
+    --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 220 14% 16%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 220 14% 16%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 91% 60%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 220 13% 18%;
-    --input: 220 13% 18%;
-    --ring: 217 91% 60%;
-    --chart-1: 217 91% 60%;
-    --chart-2: 142 76% 36%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 220 27% 8%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 220 23% 11%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 220 13% 18%;
-    --sidebar-ring: 217 91% 60%;
   }
 }
 
@@ -93,46 +78,127 @@ body {
   }
 }
 
-/* Custom blue theme overrides */
-.blue-theme {
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+/* Custom Blue Theme Styles */
+.bg-gradient-blue {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+  min-height: 100vh;
 }
 
 .status-card {
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  backdrop-filter: blur(10px);
+  @apply bg-slate-800/50 border-slate-700/50 backdrop-blur-sm;
+  transition: all 0.3s ease;
 }
 
-.live-badge {
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
-  color: white;
-  font-weight: 600;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-.fee-tier-badge {
-  background: linear-gradient(90deg, #8b5cf6 0%, #7c3aed 100%);
-  color: white;
-  font-weight: 600;
+.status-card:hover {
+  @apply bg-slate-800/70 border-slate-600/70;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
 .pool-card {
-  background: rgba(30, 41, 59, 0.6);
-  border: 1px solid rgba(59, 130, 246, 0.15);
-  backdrop-filter: blur(8px);
+  @apply bg-slate-800/60 border-slate-700/60 backdrop-blur-sm;
   transition: all 0.3s ease;
 }
 
 .pool-card:hover {
-  border-color: rgba(59, 130, 246, 0.4);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
+  @apply bg-slate-800/80 border-slate-600/80;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
-.active-tab {
-  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-  font-weight: 600;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+.live-badge {
+  @apply bg-green-500 text-white border-0 font-semibold;
+  animation: pulse-green 2s infinite;
+}
+
+.fee-tier-badge {
+  @apply bg-purple-600 text-white border-0 font-medium;
+}
+
+.tab-trigger {
+  @apply text-gray-400 hover:text-white hover:bg-slate-700/50 transition-all duration-200;
+}
+
+.tab-trigger[data-state="active"] {
+  @apply bg-blue-600 text-white shadow-lg;
+}
+
+@keyframes pulse-green {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes pulse-blue {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.animate-pulse-blue {
+  animation: pulse-blue 2s infinite;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  .status-card {
+    @apply p-3;
+  }
+
+  .pool-card {
+    @apply p-3;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  .status-card,
+  .pool-card,
+  .tab-trigger {
+    transition: none;
+  }
+
+  .animate-pulse-blue,
+  .live-badge {
+    animation: none;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .status-card {
+    @apply border-2 border-white;
+  }
+
+  .pool-card {
+    @apply border-2 border-gray-300;
+  }
 }

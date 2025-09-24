@@ -27,6 +27,7 @@ import {
   Globe,
   Timer,
   Database,
+  Info,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -71,9 +72,11 @@ interface PoolData {
 export default function SniperBotDashboard() {
   const { toast } = useToast()
   const [isConnected, setIsConnected] = useState(false)
-  const [walletAddress, setWalletAddress] = useState("")
+  const [walletAddress, setWalletAddress] = useState<string>("")
+  const [walletType, setWalletType] = useState<"metamask" | "private-key" | "readonly">("metamask")
   const [balance, setBalance] = useState("0")
   const [isLoading, setIsLoading] = useState(false)
+  const [ethPrice, setEthPrice] = useState(2000) // Mock ETH price in USD
 
   const [config, setConfig] = useState<BotConfig>({
     isActive: false,
@@ -126,6 +129,19 @@ export default function SniperBotDashboard() {
     },
   ])
 
+  // Calculate gas costs in USD
+  const calculateGasPriceUSD = (gasPriceGwei: string): number => {
+    const gasPriceWei = Number.parseFloat(gasPriceGwei) * 1e9
+    const gasCostEth = (gasPriceWei * 21000) / 1e18 // Standard transfer gas limit
+    return gasCostEth * ethPrice
+  }
+
+  const calculateMaxGasLimitUSD = (gasLimit: string, gasPriceGwei: string): number => {
+    const gasPriceWei = Number.parseFloat(gasPriceGwei) * 1e9
+    const gasCostEth = (gasPriceWei * Number.parseFloat(gasLimit)) / 1e18
+    return gasCostEth * ethPrice
+  }
+
   // Mock trading summary data
   const tradingSummaryData: TradingSummaryData = {
     totalTrades: stats.totalTrades,
@@ -146,6 +162,30 @@ export default function SniperBotDashboard() {
 
   const handleConfigChange = (key: keyof BotConfig, value: string | boolean) => {
     setConfig((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const handleWalletConnect = (connection: { type: "metamask" | "private-key"; address: string; signer?: any }) => {
+    setIsConnected(true)
+    setWalletAddress(connection.address)
+    setWalletType(connection.type)
+    // Mock balance for demo
+    setBalance("1.234")
+
+    toast({
+      title: "Wallet Connected",
+      description: `Connected via ${connection.type === "metamask" ? "MetaMask" : "Private Key"}`,
+    })
+  }
+
+  const handleWalletDisconnect = () => {
+    setIsConnected(false)
+    setWalletAddress("")
+    setBalance("0")
+
+    toast({
+      title: "Wallet Disconnected",
+      description: "Your wallet has been disconnected",
+    })
   }
 
   const handleStartBot = async () => {
@@ -321,41 +361,26 @@ export default function SniperBotDashboard() {
         <WalletConnector
           isConnected={isConnected}
           walletAddress={walletAddress}
-          balance={balance}
-          onConnect={(address, bal) => {
-            setIsConnected(true)
-            setWalletAddress(address)
-            setBalance(bal)
-          }}
-          onDisconnect={() => {
-            setIsConnected(false)
-            setWalletAddress("")
-            setBalance("0")
-          }}
+          walletType={walletType}
+          onConnect={handleWalletConnect}
         />
 
         {/* Main Content */}
         <Tabs defaultValue="live-pools" className="space-y-4">
           <TabsList className="grid w-full grid-cols-4 bg-blue-card/50 border border-blue-accent/20">
-            <TabsTrigger
-              value="dashboard"
-              className="data-[state=active]:bg-blue-accent data-[state=active]:text-white"
-            >
+            <TabsTrigger value="dashboard" className="tab-trigger">
               <BarChart3 className="h-4 w-4 mr-2" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="config" className="data-[state=active]:bg-blue-accent data-[state=active]:text-white">
+            <TabsTrigger value="config" className="tab-trigger">
               <Settings className="h-4 w-4 mr-2" />
               Configuration
             </TabsTrigger>
-            <TabsTrigger
-              value="live-pools"
-              className="data-[state=active]:bg-blue-accent data-[state=active]:text-white active-tab"
-            >
+            <TabsTrigger value="live-pools" className="tab-trigger">
               <Database className="h-4 w-4 mr-2" />
               Live Pools
             </TabsTrigger>
-            <TabsTrigger value="activity" className="data-[state=active]:bg-blue-accent data-[state=active]:text-white">
+            <TabsTrigger value="activity" className="tab-trigger">
               <Activity className="h-4 w-4 mr-2" />
               System Logs
             </TabsTrigger>
@@ -452,16 +477,37 @@ export default function SniperBotDashboard() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="targetToken" className="text-gray-300">
-                      Target Token Address
-                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="targetToken" className="text-gray-300">
+                        Target Token Address
+                      </Label>
+                      <div className="group relative">
+                        <Info className="h-4 w-4 text-blue-bright cursor-help" />
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none w-64 z-10">
+                          <div className="text-center">
+                            <p className="font-semibold mb-1">What is a Target Token Address?</p>
+                            <p className="text-xs">
+                              This is the contract address of the specific token you want to snipe. For example, if you
+                              want to buy PEPE tokens, you would enter PEPE's contract address
+                              (0x6982508145454Ce325dDbE47a25d4ec3d2311933). Leave empty to snipe any new token that
+                              meets your criteria.
+                            </p>
+                          </div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
+                        </div>
+                      </div>
+                    </div>
                     <Input
                       id="targetToken"
-                      placeholder="0x..."
+                      placeholder="0x... (leave empty to snipe any new token)"
                       value={config.targetToken}
                       onChange={(e) => handleConfigChange("targetToken", e.target.value)}
                       className="bg-blue-dark/50 border-blue-accent/30 text-white placeholder:text-gray-500"
                     />
+                    <p className="text-xs text-gray-500">
+                      Optional: Enter a specific token contract address to target, or leave empty to snipe any new
+                      tokens
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -504,6 +550,9 @@ export default function SniperBotDashboard() {
                         onChange={(e) => handleConfigChange("gasPrice", e.target.value)}
                         className="bg-blue-dark/50 border-blue-accent/30 text-white"
                       />
+                      <p className="text-xs text-green-live">
+                        ≈ ${calculateGasPriceUSD(config.gasPrice).toFixed(2)} USD per transaction
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="maxGasLimit" className="text-gray-300">
@@ -516,6 +565,9 @@ export default function SniperBotDashboard() {
                         onChange={(e) => handleConfigChange("maxGasLimit", e.target.value)}
                         className="bg-blue-dark/50 border-blue-accent/30 text-white"
                       />
+                      <p className="text-xs text-green-live">
+                        ≈ ${calculateMaxGasLimitUSD(config.maxGasLimit, config.gasPrice).toFixed(2)} USD max cost
+                      </p>
                     </div>
                   </div>
                 </CardContent>
