@@ -105,10 +105,10 @@ export class RealUniswapListener {
         try {
           const block = await event.getBlock()
           const currentTime = Date.now()
-          const blockTime = block.timestamp * 1000
+          const blockTime = Number(block.timestamp) * 1000
           const secondsAgo = Math.floor((currentTime - blockTime) / 1000)
 
-          addLog(`🚨 NEW POOL CREATED! Block: ${event.blockNumber}`, "success")
+          addLog(`🚨 NEW POOL CREATED! Block: ${Number(event.blockNumber)}`, "success")
           addLog(`   ⏰ Created ${secondsAgo} seconds ago`, "info")
           addLog(`   📍 Pool: ${poolAddress}`, "info")
           addLog(`   🪙 Token0: ${token0}`, "info")
@@ -134,7 +134,7 @@ export class RealUniswapListener {
             token0,
             token1,
             fee: Number(fee),
-            blockNumber: event.blockNumber,
+            blockNumber: Number(event.blockNumber),
             timestamp: blockTime.toString(),
             transactionHash: event.transactionHash,
             token0Info,
@@ -146,7 +146,7 @@ export class RealUniswapListener {
           this.stats.totalPools++
           this.stats.recentPools++
           this.stats.lastActivity = new Date().toLocaleTimeString()
-          this.stats.currentBlock = event.blockNumber
+          this.stats.currentBlock = Number(event.blockNumber)
           this.stats.eventsListened++
 
           onPoolDetected(poolData)
@@ -187,7 +187,7 @@ export class RealUniswapListener {
         const [token0, token1, fee, tickSpacing, poolAddress] = event.args!
         const block = await event.getBlock()
         const currentTime = Date.now()
-        const blockTime = block.timestamp * 1000
+        const blockTime = Number(block.timestamp) * 1000
         const secondsAgo = Math.floor((currentTime - blockTime) / 1000)
 
         // Only show very recent pools (less than 1 hour old)
@@ -210,7 +210,7 @@ export class RealUniswapListener {
           token0,
           token1,
           fee: Number(fee),
-          blockNumber: event.blockNumber,
+          blockNumber: Number(event.blockNumber),
           timestamp: blockTime.toString(),
           transactionHash: event.transactionHash,
           token0Info,
