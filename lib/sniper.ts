@@ -86,7 +86,7 @@ export class Sniper {
   private f: ethers.Contract
   private run = false
   private stats: Stats
-  private start = 0
+  private startTime = 0
   private ethPrice = 2000
 
   constructor(rpc: string) {
@@ -107,7 +107,7 @@ export class Sniper {
 
   async start(onPool: (p: Pool) => void, log: (m: string, t?: string) => void) {
     this.run = true
-    this.start = Date.now()
+    this.startTime = Date.now()
     this.stats.running = true
     this.stats.status = "connecting"
 
@@ -404,8 +404,8 @@ export class Sniper {
   }
 
   getStats(): Stats {
-    if (this.run && this.start > 0) {
-      const rt = Date.now() - this.start
+    if (this.run && this.startTime > 0) {
+      const rt = Date.now() - this.startTime
       const h = Math.floor(rt / 36e5)
       const m = Math.floor((rt % 36e5) / 6e4)
       this.stats.runtime = `${h}h ${m}m`
