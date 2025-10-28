@@ -1,4 +1,8 @@
 import { ethers } from "ethers"
+import { AutomatedTrader, createDefaultTradingConfig } from "./automated-trader"
+import { SecurityManager, createDefaultSecurityConfig } from "./security-manager"
+import { PortfolioTracker } from "./portfolio-tracker"
+import { PriceMonitor } from "./price-monitor"
 
 const FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"
 const WETH = "0x4200000000000000000000000000000000000006"
@@ -81,6 +85,14 @@ export interface Trade {
   error?: string
 }
 
+export interface SniperConfig {
+  enableAutomatedTrading?: boolean
+  enableSecurity?: boolean
+  enablePortfolio?: boolean
+  enablePriceMonitor?: boolean
+  privateKey?: string
+}
+
 export class Sniper {
   private p: ethers.JsonRpcProvider
   private f: ethers.Contract
@@ -89,9 +101,16 @@ export class Sniper {
   private startTime = 0
   private ethPrice = 2000
 
-  constructor(rpc: string) {
+  private trader?: AutomatedTrader
+  private security?: SecurityManager
+  private portfolio?: PortfolioTracker
+  private priceMonitor?: PriceMonitor
+  private config: SniperConfig
+
+  constructor(rpc: string, config: SniperConfig = {}) {
     this.p = new ethers.JsonRpcProvider(rpc)
     this.f = new ethers.Contract(FACTORY, FACTORY_ABI, this.p)
+    this.config = config
     this.stats = {
       running: false,
       pools: 0,
@@ -102,6 +121,19 @@ export class Sniper {
       block: 0,
       events: 0,
       newTokens: 0,
+    }
+
+    if (config.enableAutomatedTrading && config.privateKey) {
+      this.trader = new AutomatedTrader(this.p, config.privateKey, createDefaultTradingConfig())
+    }
+    if (config.enableSecurity) {
+      this.security = new SecurityManager(createDefaultSecurityConfig())
+    }
+    if (config.enablePortfolio) {
+      this.portfolio = new PortfolioTracker(this.p)
+    }
+    if (config.enablePriceMonitor) {
+      this.priceMonitor = new PriceMonitor(this.p)
     }
   }
 
@@ -309,6 +341,12 @@ export class Sniper {
       conf -= 20
     }
 
+    if (this.security) {
+      const secAnalysis = await this.security.analyzeTokenSecurity(token)
+      risk = Math.max(risk, Math.floor(secAnalysis.riskScore / 10))
+      reasons.push(...secAnalysis.risks.slice(0, 3))
+    }
+
     risk = Math.max(1, Math.min(10, risk))
     conf = Math.max(5, Math.min(95, conf))
     const action = conf >= 60 && risk <= 5 && locked && verified ? "BUY" : conf >= 40 && risk <= 7 ? "MONITOR" : "AVOID"
@@ -348,6 +386,13 @@ export class Sniper {
   }
 
   async trade(token: string, eth: string, slip: number, gas: string): Promise<Trade> {
+    if (this.security) {
+      const validation = await this.security.validateTrade(token, Number.parseFloat(eth), "BUY")
+      if (!validation.allowed) {
+        return { success: false, error: validation.reason }
+      }
+    }
+
     const start = Date.now()
     await new Promise((r) => setTimeout(r, 1000 + Math.random() * 3000))
 
@@ -358,6 +403,27 @@ export class Sniper {
       const g = 150000 + Math.random() * 100000
       const cost = (g * Number.parseFloat(gas) * 1e-9).toFixed(6)
       const out = (Number.parseFloat(eth) * 1e6 * (0.95 + Math.random() * 0.1)).toString()
+
+      if (this.portfolio) {
+        await this.portfolio.addTransaction({
+          hash: this.genTx(),
+          type: "buy",
+          tokenAddress: token,
+          tokenSymbol: "TOKEN",
+          amount: out,
+          pricePerToken: Number.parseFloat(eth) / Number.parseFloat(out),
+          totalValue: Number.parseFloat(eth),
+          gasUsed: g.toString(),
+          gasPriceGwei: gas,
+          gasFeesETH: cost,
+          gasFeesUSD: Number.parseFloat(cost) * this.ethPrice,
+          timestamp: Date.now(),
+          blockNumber: this.stats.block,
+          from: "0x0",
+          to: token,
+        })
+      }
+
       return {
         success: true,
         tx: this.genTx(),
@@ -411,5 +477,18 @@ export class Sniper {
       this.stats.runtime = `${h}h ${m}m`
     }
     return { ...this.stats }
+  }
+
+  getTrader() {
+    return this.trader
+  }
+  getSecurity() {
+    return this.security
+  }
+  getPortfolio() {
+    return this.portfolio
+  }
+  getPriceMonitor() {
+    return this.priceMonitor
   }
 }

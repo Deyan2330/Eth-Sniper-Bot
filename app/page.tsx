@@ -108,6 +108,9 @@ export default function Dashboard() {
   const [pk, setPk] = useState("")
   const [roAddr, setRoAddr] = useState("")
   const [copied, setCopied] = useState(false)
+  const [advancedMode, setAdvancedMode] = useState(false)
+  const [securityAlerts, setSecurityAlerts] = useState<any[]>([])
+  const [portfolioData, setPortfolioData] = useState<any>(null)
 
   useEffect(() => {
     logsEnd.current?.scrollIntoView({ behavior: "smooth" })
@@ -119,7 +122,10 @@ export default function Dashboard() {
   }, [sniper])
 
   const log = (msg: string, type: "info" | "success" | "warning" | "error" = "info") =>
-    setLogs((p) => [...p.slice(-99), { id: Date.now().toString(), time: new Date().toLocaleTimeString(), msg, type }])
+    setLogs((p) => [
+      ...p.slice(-99),
+      { id: `${Date.now()}-${Math.random()}`, time: new Date().toLocaleTimeString(), msg, type },
+    ])
 
   const copy = async (text: string, label = "Address") => {
     try {
@@ -185,7 +191,13 @@ export default function Dashboard() {
     log("🚀 Starting bot...", "info")
     try {
       const { Sniper } = await import("@/lib/sniper")
-      const s = new Sniper(config.rpc)
+      const s = new Sniper(config.rpc, {
+        enableAutomatedTrading: advancedMode && config.pk,
+        enableSecurity: advancedMode,
+        enablePortfolio: advancedMode && connected,
+        enablePriceMonitor: advancedMode,
+        privateKey: config.pk,
+      })
       setSniper(s)
       await s.start((p: Pool) => {
         setPools((prev) => [p, ...prev.slice(0, 49)])
@@ -574,6 +586,32 @@ export default function Dashboard() {
                       />
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white">Advanced Features</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-gray-300">Enable Advanced Mode</Label>
+                    <Button
+                      size="sm"
+                      variant={advancedMode ? "default" : "outline"}
+                      onClick={() => setAdvancedMode(!advancedMode)}
+                      className={advancedMode ? "bg-blue-600" : ""}
+                    >
+                      {advancedMode ? "ON" : "OFF"}
+                    </Button>
+                  </div>
+                  {advancedMode && (
+                    <div className="text-xs text-gray-400 space-y-1">
+                      <p>✅ Automated Trading</p>
+                      <p>✅ Security Manager</p>
+                      <p>✅ Portfolio Tracker</p>
+                      <p>✅ Price Monitor</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
