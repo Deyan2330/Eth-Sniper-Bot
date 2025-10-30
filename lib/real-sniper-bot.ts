@@ -1,152 +1,284 @@
 import { ethers } from "ethers"
 
-const FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"
-const WETH = "0x4200000000000000000000000000000000000006"
-const FACTORY_ABI = [
-  "event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool)",
-]
-const ERC20_ABI = [
-  "function name() view returns (string)",
-  "function symbol() view returns (string)",
-  "function decimals() view returns (uint8)",
-]
+export interface TokenInfo {
+  address: string
+  symbol: string
+  name: string
+  decimals: number
+}
 
 export interface RealPoolData {
   poolAddress: string
   token0: string
   token1: string
   fee: number
-  timestamp: string
   blockNumber: number
+  timestamp: string
   transactionHash: string
-  token0Info?: {
-    symbol: string
-    name: string
-    decimals: number
-  }
-  token1Info?: {
-    symbol: string
-    name: string
-    decimals: number
-  }
+  token0Info?: TokenInfo
+  token1Info?: TokenInfo
+  isNewToken: boolean
+  createdSecondsAgo: number
 }
+
+export interface RealTimeStats {
+  isRunning: boolean
+  totalPools: number
+  recentPools: number
+  connectionStatus: string
+  runtime: string
+  lastActivity: string
+  currentBlock: number
+  eventsListened: number
+  newTokensFound: number
+}
+
+// Uniswap V3 Factory on Base
+const UNISWAP_V3_FACTORY_BASE = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"
+
+// WETH address on Base (used to identify new tokens)
+const WETH_BASE = "0x4200000000000000000000000000000000000006"
+
+// Uniswap V3 Factory ABI (PoolCreated event)
+const FACTORY_ABI = [
+  "event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool)",
+]
+
+// ERC20 ABI for token info
+const ERC20_ABI = [
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+  "function totalSupply() view returns (uint256)",
+]
 
 export class RealUniswapListener {
   private provider: ethers.JsonRpcProvider
-  private factory: ethers.Contract
+  private factoryContract: ethers.Contract
   private isRunning = false
+  private stats: RealTimeStats
+  private startTime = 0
+  private rpcUrl: string
 
   constructor(rpcUrl: string) {
+    this.rpcUrl = rpcUrl
     this.provider = new ethers.JsonRpcProvider(rpcUrl)
-    this.factory = new ethers.Contract(FACTORY, FACTORY_ABI, this.provider)
+    this.factoryContract = new ethers.Contract(UNISWAP_V3_FACTORY_BASE, FACTORY_ABI, this.provider)
+
+    this.stats = {
+      isRunning: false,
+      totalPools: 0,
+      recentPools: 0,
+      connectionStatus: "disconnected",
+      runtime: "0h 0m",
+      lastActivity: "None",
+      currentBlock: 0,
+      eventsListened: 0,
+      newTokensFound: 0,
+    }
   }
 
-  async start(onPoolDetected: (pool: RealPoolData) => void, onLog: (message: string) => void): Promise<void> {
-    if (this.isRunning) {
-      throw new Error("Listener is already running")
-    }
-
+  async start(onPoolDetected: (pool: RealPoolData) => void, addLog: (message: string, type?: string) => void) {
     this.isRunning = true
-    onLog("🚀 Starting Real Uniswap Listener...")
-    onLog(`📡 Connected to Base Chain`)
-    onLog(`👂 Listening for PoolCreated events...`)
+    this.startTime = Date.now()
+    this.stats.isRunning = true
+    this.stats.connectionStatus = "connecting"
 
-    this.factory.on("PoolCreated", async (token0, token1, fee, tickSpacing, pool, event) => {
-      if (!this.isRunning) return
+    try {
+      // Test connection
+      const network = await this.provider.getNetwork()
+      const currentBlock = await this.provider.getBlockNumber()
 
-      try {
-        const block = await event.getBlock()
-        const blockTime = Number(block.timestamp) * 1000
+      addLog("🔗 Connected to Base network", "success")
+      addLog(`📡 Network: ${network.name} (Chain ID: ${network.chainId})`, "info")
+      addLog(`📦 Current block: ${currentBlock.toLocaleString()}`, "info")
+      addLog("👂 Listening for NEW pool creation events...", "info")
+      addLog("🎯 Filtering for brand new tokens only", "warning")
 
-        const [info0, info1] = await Promise.all([this.getTokenInfo(token0), this.getTokenInfo(token1)])
+      this.stats.connectionStatus = "connected"
+      this.stats.currentBlock = currentBlock
 
-        const poolData: RealPoolData = {
-          poolAddress: pool,
-          token0,
-          token1,
-          fee: Number(fee),
-          timestamp: new Date(blockTime).toISOString(),
-          blockNumber: Number(event.blockNumber),
-          transactionHash: event.transactionHash,
-          token0Info: info0,
-          token1Info: info1,
+      // Listen for new PoolCreated events in real-time
+      this.factoryContract.on("PoolCreated", async (token0, token1, fee, tickSpacing, poolAddress, event) => {
+        if (!this.isRunning) return
+
+        try {
+          const block = await event.getBlock()
+          const currentTime = Date.now()
+          const blockTime = block.timestamp * 1000
+          const secondsAgo = Math.floor((currentTime - blockTime) / 1000)
+
+          addLog(`🚨 NEW POOL CREATED! Block: ${event.blockNumber}`, "success")
+          addLog(`   ⏰ Created ${secondsAgo} seconds ago`, "info")
+          addLog(`   📍 Pool: ${poolAddress}`, "info")
+          addLog(`   🪙 Token0: ${token0}`, "info")
+          addLog(`   🪙 Token1: ${token1}`, "info")
+          addLog(`   💰 Fee: ${fee / 10000}%`, "info")
+
+          // Check if this involves a new token (not WETH)
+          const isNewToken = token0 !== WETH_BASE && token1 !== WETH_BASE
+
+          if (isNewToken) {
+            addLog(`🎉 NEW TOKEN DETECTED! This is a fresh launch!`, "success")
+            this.stats.newTokensFound++
+          } else {
+            addLog(`ℹ️ Pool with WETH - might be new token launch`, "info")
+          }
+
+          // Get token information
+          const token0Info = await this.getTokenInfo(token0, addLog)
+          const token1Info = await this.getTokenInfo(token1, addLog)
+
+          const poolData: RealPoolData = {
+            poolAddress,
+            token0,
+            token1,
+            fee: Number(fee),
+            blockNumber: event.blockNumber,
+            timestamp: blockTime.toString(),
+            transactionHash: event.transactionHash,
+            token0Info,
+            token1Info,
+            isNewToken,
+            createdSecondsAgo: secondsAgo,
+          }
+
+          this.stats.totalPools++
+          this.stats.recentPools++
+          this.stats.lastActivity = new Date().toLocaleTimeString()
+          this.stats.currentBlock = event.blockNumber
+          this.stats.eventsListened++
+
+          onPoolDetected(poolData)
+        } catch (error) {
+          addLog(`❌ Error processing pool event: ${error}`, "error")
         }
+      })
 
-        onLog(`🎯 New pool detected: ${pool}`)
-        onPoolDetected(poolData)
-      } catch (error) {
-        onLog(`❌ Error processing pool event: ${error}`)
-      }
-    })
+      // Also listen for the latest few blocks to catch any recent pools
+      addLog("🔍 Scanning last 10 blocks for recent pools...", "info")
+      await this.scanRecentBlocks(onPoolDetected, addLog)
+    } catch (error) {
+      addLog(`❌ Failed to connect to Base network: ${error}`, "error")
+      this.stats.connectionStatus = "error"
+      throw error
+    }
+  }
 
-    // Scan recent blocks
+  private async scanRecentBlocks(
+    onPoolDetected: (pool: RealPoolData) => void,
+    addLog: (message: string, type?: string) => void,
+  ) {
     try {
       const currentBlock = await this.provider.getBlockNumber()
-      const fromBlock = currentBlock - 10
-      onLog(`🔍 Scanning blocks ${fromBlock} to ${currentBlock}...`)
+      const fromBlock = currentBlock - 10 // Last 10 blocks
 
-      const events = await this.factory.queryFilter(this.factory.filters.PoolCreated(), fromBlock, currentBlock)
+      addLog(`🔍 Scanning blocks ${fromBlock} to ${currentBlock}...`, "info")
 
-      onLog(`📊 Found ${events.length} recent pools`)
+      // Get PoolCreated events from recent blocks
+      const filter = this.factoryContract.filters.PoolCreated()
+      const events = await this.factoryContract.queryFilter(filter, fromBlock, currentBlock)
+
+      addLog(`📊 Found ${events.length} pools in last 10 blocks`, "info")
 
       for (const event of events) {
         if (!this.isRunning) break
 
-        const [token0, token1, fee, tickSpacing, pool] = event.args!
+        const [token0, token1, fee, tickSpacing, poolAddress] = event.args!
         const block = await event.getBlock()
-        const blockTime = Number(block.timestamp) * 1000
+        const currentTime = Date.now()
+        const blockTime = block.timestamp * 1000
+        const secondsAgo = Math.floor((currentTime - blockTime) / 1000)
 
-        const [info0, info1] = await Promise.all([this.getTokenInfo(token0), this.getTokenInfo(token1)])
+        // Only show very recent pools (less than 1 hour old)
+        if (secondsAgo > 3600) continue
+
+        const isNewToken = token0 !== WETH_BASE && token1 !== WETH_BASE
+
+        addLog(`🕐 Recent pool found: ${secondsAgo}s ago`, "info")
+
+        if (isNewToken) {
+          addLog(`🎯 Contains new token!`, "success")
+          this.stats.newTokensFound++
+        }
+
+        const token0Info = await this.getTokenInfo(token0, addLog)
+        const token1Info = await this.getTokenInfo(token1, addLog)
 
         const poolData: RealPoolData = {
-          poolAddress: pool,
+          poolAddress,
           token0,
           token1,
           fee: Number(fee),
-          timestamp: new Date(blockTime).toISOString(),
-          blockNumber: Number(event.blockNumber),
+          blockNumber: event.blockNumber,
+          timestamp: blockTime.toString(),
           transactionHash: event.transactionHash,
-          token0Info: info0,
-          token1Info: info1,
+          token0Info,
+          token1Info,
+          isNewToken,
+          createdSecondsAgo: secondsAgo,
         }
 
+        this.stats.totalPools++
+        this.stats.recentPools++
+        this.stats.eventsListened++
+
         onPoolDetected(poolData)
+
+        // Small delay to avoid overwhelming
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
     } catch (error) {
-      onLog(`⚠️ Error scanning recent blocks: ${error}`)
+      addLog(`⚠️ Error scanning recent blocks: ${error}`, "warning")
     }
   }
 
-  async stop(): Promise<void> {
-    this.isRunning = false
-    this.factory.removeAllListeners("PoolCreated")
-  }
-
-  private async getTokenInfo(tokenAddress: string): Promise<{
-    symbol: string
-    name: string
-    decimals: number
-  }> {
+  private async getTokenInfo(
+    tokenAddress: string,
+    addLog: (message: string, type?: string) => void,
+  ): Promise<TokenInfo> {
     try {
-      const contract = new ethers.Contract(tokenAddress, ERC20_ABI, this.provider)
-      const [symbol, name, decimals] = await Promise.all([
-        contract.symbol().catch(() => "UNKNOWN"),
-        contract.name().catch(() => "Unknown Token"),
-        contract.decimals().catch(() => 18),
+      const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.provider)
+
+      const [name, symbol, decimals] = await Promise.all([
+        tokenContract.name().catch(() => "Unknown"),
+        tokenContract.symbol().catch(() => "UNKNOWN"),
+        tokenContract.decimals().catch(() => 18),
       ])
 
       return {
-        symbol,
+        address: tokenAddress,
         name,
+        symbol,
         decimals: Number(decimals),
       }
-    } catch {
+    } catch (error) {
+      addLog(`⚠️ Could not fetch token info for ${tokenAddress}`, "warning")
       return {
-        symbol: "UNKNOWN",
+        address: tokenAddress,
         name: "Unknown Token",
+        symbol: "UNKNOWN",
         decimals: 18,
       }
     }
+  }
+
+  async stop() {
+    this.isRunning = false
+    this.stats.isRunning = false
+    this.stats.connectionStatus = "disconnected"
+
+    // Remove all listeners
+    this.factoryContract.removeAllListeners("PoolCreated")
+  }
+
+  getRealTimeStats(): RealTimeStats {
+    if (this.isRunning && this.startTime > 0) {
+      const runtime = Date.now() - this.startTime
+      const hours = Math.floor(runtime / (1000 * 60 * 60))
+      const minutes = Math.floor((runtime % (1000 * 60 * 60)) / (1000 * 60))
+      this.stats.runtime = `${hours}h ${minutes}m`
+    }
+    return { ...this.stats }
   }
 }

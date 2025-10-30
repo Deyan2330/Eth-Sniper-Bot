@@ -12,11 +12,11 @@
     --popover-foreground: 222.2 84% 4.9%;
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
+    --secondary: 210 40% 96%;
     --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
+    --muted: 210 40% 96%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
+    --accent: 210 40% 96%;
     --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
@@ -24,7 +24,13 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
   }
+
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -45,6 +51,11 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
   }
 }
 
@@ -54,5 +65,44 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Custom styles for the sniper bot */
+.bg-gradient-blue {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0f172a 100%);
+}
+
+.status-card {
+  @apply bg-slate-800/50 border-slate-700 backdrop-blur-sm;
+}
+
+.pool-card {
+  @apply bg-slate-800/50 border-slate-700 backdrop-blur-sm;
+}
+
+.live-badge {
+  @apply bg-green-500 text-white animate-pulse;
+}
+
+.fee-tier-badge {
+  @apply bg-purple-500 text-white;
+}
+
+.tab-trigger {
+  @apply data-[state=active]:bg-blue-600 data-[state=active]:text-white;
+}
+
+.animate-pulse-blue {
+  animation: pulse-blue 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-blue {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
   }
 }
